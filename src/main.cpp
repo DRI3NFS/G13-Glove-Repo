@@ -10,6 +10,8 @@
 // Code for MPU6050 sensor was referenced from the following repository: https://github.com/ElectronicCats/mpu6050/tree/master/examples
 // NOTE: accelerometer data values end up as estimates, if we were to leave the MPU6050 in a fixed position, we expect the outputs to be 0,0 and 9.8ms2 but it is not.
 // Flex sensor code was made using simple ADC capture and data adjustments to accomodate for resistance variability
+// Important things to note: might have to change the gesture signatures into non-string data to conserve flash space
+// Communication code must be eventually integrated into this code unless we decided on using separate esp32s for the functions
 
 MPU6050 mpuHand(0x68);
 int16_t handax, handay, handaz;
@@ -35,14 +37,10 @@ void setup(void) {
   Serial.begin(115200);
   Wire.begin();
 
-  while (!Serial)
-    delay(10); // will pause Zero, Leonardo, etc until serial console opens
-
-  Serial.println("Adafruit MPU6050 test!");
-
   // Try to initialize!
   mpuHand.initialize();
   
+/*   // most likely redundant check since I already know it works
   if (mpuHand.testConnection() == false) {
     Serial.println("Failed to find MPU6050 chip");
     while (1) {
@@ -52,7 +50,7 @@ void setup(void) {
   else{
     Serial.println("MPU6050 Found!");
 
-  }
+  } */
 
   // Set up flex sensors and MPU6050
   tmbFing.pin = 36;
@@ -60,12 +58,8 @@ void setup(void) {
   midFing.pin = 34;
   rngFing.pin = 35;
   pnkFing.pin = 32;
-/* 
-  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
-  mpu.setGyroRange(MPU6050_RANGE_250_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ); */
 
-  // Preset Gestures for now
+  // Preset Gestures for now, signature will be replaced with non-string in Gesture.h
   GestureSet[0].setGesture("agree", {1, -1, -1, -1, -1});
   GestureSet[1].setGesture("point", {-1, 1, -1, -1, -1});
   GestureSet[2].setGesture("promise", {-1, -1, -1, -1, 1});
@@ -73,8 +67,6 @@ void setup(void) {
   GestureSet[4].setGesture("okay", {0, 0, 1, 1, 1});
   GestureSet[5].setGesture("idle", {0, 0, 0, 0, 0});
 }
-
-
 
 void loop() {
   // Read raw flex sensor data from ADCs
@@ -101,7 +93,7 @@ void loop() {
   };
   currGest.setGesture("current", flexion);
 
-  // Print the current gesture
+  // Print the current gesture, this command should be transferred to Gesture.h
   Serial.println("Current Gesture:");
   for (int i = 0; i < 5; i++) {
     Serial.print(flexion[i]);
@@ -109,7 +101,7 @@ void loop() {
   }
   Serial.println("");
 
-  // Check if the current gesture matches any of the preset gestures
+  // Check if the current gesture matches any of the preset gestures, this command should be transferred to Gesture.h under class Gesture{}
   for (int i = 0; i < 5; i++) {
     if (currGest.isThis(GestureSet[i].getFingerStates()) != "") {
       Serial.println(GestureSet[i].getName().c_str());
@@ -133,6 +125,7 @@ void loop() {
   Serial.println(pitch, 1);
   */
 
+  // print command must be moved to Gesture.h under class tilt{}
   std::string handDir = handOrient.classify(roll, pitch);
   Serial.print("hand is oriented ");
   Serial.println(handDir.c_str());
