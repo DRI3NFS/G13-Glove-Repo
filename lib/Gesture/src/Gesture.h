@@ -6,6 +6,31 @@
 #include <iostream>
 #include "Adafruit_Sensor.h"
 
+class tilt {
+public:
+    float roll;
+    float pitch;
+    std::string orientation = "";
+
+    std::string classify(float roll, float pitch){
+        if(pitch <= -80){
+            orientation = "down";
+        }
+        else if(pitch >= 80){
+            orientation = "up";
+        }
+        else if(pitch >= -10 && pitch <= 10){
+            orientation = "forward";
+        }
+        else{};
+
+        return orientation;
+    }
+
+    //will add code to calibrate orientations depending on user hand
+};
+
+
 //Gesture class
 class gesture {
 public:
@@ -101,28 +126,5 @@ private:
     int idleMax;
 };
 
-class tilt {
-public:
-    float roll;
-    float pitch;
-    std::string orientation = "";
-
-    std::string classify(float roll, float pitch){
-        if(pitch <= -80){
-            orientation = "down";
-        }
-        else if(pitch >= 80){
-            orientation = "up";
-        }
-        else if(pitch >= -10 && pitch <= 10){
-            orientation = "forward";
-        }
-        else{};
-
-        return orientation;
-    }
-
-    //will add code to calibrate orientations depending on user hand
-};
 
 #endif
