@@ -1,3 +1,12 @@
+/*  Hand Sensor Data Collect and Send Code
+    by Ralph Lejano and Edcel Abanto (G13)
+    
+    The purpose of this code is to consolidate data values from different sensors on a glove.
+    Five flex sensors and two MPU6050s are attached on a glove to detect finger and wrist flexion.
+    Raw data from flex sensors and accelerometers are converted into smaller values and consolidated 
+    into one line of data labelled as a gesture.
+*/
+
 #include <Arduino.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BusIO_Register.h>
@@ -13,14 +22,36 @@
 // Important things to note: might have to change the gesture signatures into non-string data to conserve flash space
 // Communication code must be eventually integrated into this code unless we decided on using separate esp32s for the functions
 
-MPU6050 mpuHand(0x68);
+//                 calibration
+//                      |
+//                      v
+//                    idle
+//                      |
+//                      v
+//              connect to drones
+//                      |
+//                      v
+//                select drone        (maybe we can sign a certain gesture to select one or the other or both)
+//            |         ^         |
+//            v         |         v
+//        ctrl drone1   |     ctrl drone2
+//          |           |         |
+//          |-----------|---------| (sent through a specific gesture or set of gestures)
+//          v                     v
+//     cmd sent (auto)        cmd sent (auto)
+//          |                     |
+//          V                     v
+//        drone 1               drone 2
+
+MPU6050 mpuHand(MPU6050_ADDRESS_AD0_LOW);  //hand accelerometer
 int16_t handax, handay, handaz;
 int16_t handgx, handgy, handgz;
 tilt handOrient;
 
-MPU6050 mpuWrst(0x69); //usable rergister for AD0 high or second MPU6050
-int16_t wrstax, wrstay, wrstaz;
-int16_t wrstgx, wrstgy, wrstgz;
+MPU6050 mpuFore(MPU6050_ADDRESS_AD0_HIGH); //usable register for AD0 high or second MPU6050
+int16_t foreax, foreay, foreaz;
+int16_t foregx, foregy, foregz;
+tilt foreOrient;
 
 FlexSensor tmbFing;
 FlexSensor indFing;
@@ -31,26 +62,16 @@ FlexSensor pnkFing;
 gesture currGest;
 gesture GestureSet[6];
 
-float roll, pitch;
+float handRoll, handPitch;
+float foreRoll, forePitch;
 
 void setup(void) {
   Serial.begin(115200);
   Wire.begin();
 
-  // Try to initialize!
+  // initialize both
   mpuHand.initialize();
-  
-/*   // most likely redundant check since I already know it works
-  if (mpuHand.testConnection() == false) {
-    Serial.println("Failed to find MPU6050 chip");
-    while (1) {
-      delay(10);
-    }
-  }
-  else{
-    Serial.println("MPU6050 Found!");
-
-  } */
+  mpuFore.initialize();
 
   // Set up flex sensors and MPU6050
   tmbFing.pin = 36;
@@ -115,20 +136,38 @@ void loop() {
   // hand accelerometer and gyro acquisition
   mpuHand.getMotion6(&handax, &handay, &handaz, &handgx, &handgy, &handgz);
 
-  roll = atan2(handay, handaz) * 180/PI;
-  pitch = atan2(-handax, sqrt(handay * handay + handaz * handaz)) * 180/PI;
+  /* Following Lines are for testing tilt detection */
+  handRoll = atan2(handay, handaz) * 180/PI;
+  handPitch = atan2(-handax, sqrt(handay * handay + handaz * handaz)) * 180/PI;
 
-/*   // Print the accelerometer data
+  // Print the accelerometer data
+  Serial.printf("Tilt Values from Hand Sensor:\r\n");
   Serial.print("roll: ");
-  Serial.println(roll, 1);
+  Serial.println(handRoll,1);
   Serial.print("pitch: ");
-  Serial.println(pitch, 1);
-  */
+  Serial.println(handPitch, 1);
 
   // print command must be moved to Gesture.h under class tilt{}
-  std::string handDir = handOrient.classify(roll, pitch);
+  std::string handDir = handOrient.classify(handRoll, handPitch);
   Serial.print("hand is oriented ");
   Serial.println(handDir.c_str());
+
+  mpuFore.getMotion6(&foreax, &foreay, &foreaz, &foregx, &foregy, &foregz);
+  foreRoll = atan2(foreay, foreaz) * 180/PI;
+  forePitch = atan2(-foreax, sqrt(foreay * foreay + foreaz * foreaz)) * 180/PI;
+
+  // Print the accelerometer data
+  Serial.printf("Tilt Values from Forearm Sensor:\r\n");
+  Serial.print("roll: ");
+  Serial.println(foreRoll,1);
+  Serial.print("pitch: ");
+  Serial.println(forePitch, 1);
+  /* End of tilt detection Test Code*/
+
+  // print command must be moved to Gesture.h under class tilt{}
+  std::string foreDir = foreOrient.classify(foreRoll, forePitch);
+  Serial.print("forearm is oriented ");
+  Serial.println(foreDir.c_str());
 
   Serial.println("");
   delay(100);
