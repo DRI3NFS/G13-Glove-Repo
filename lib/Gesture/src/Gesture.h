@@ -4,50 +4,55 @@
 #include <vector>
 #include <string>
 #include <iostream>
-#include "Adafruit_Sensor.h"
+#include <Arduino.h>
 
 class FlexSensor {
 public:
-    int rawValue = 0;
-    int pin;
+    //constructor
+    FlexSensor(int pin);
+
+    //update raw value
+    void updateRaw(){   //must be updated to automatically read from pin within header rather from main.cpp
+        rawValue = analogRead(pin);
+    }
 
     //manual calibration must also be implemented for when a user has to manually calibrate sensors
     void calibrateIdleMin(int idledNum){
-        //this value must be adjusted within the scaled range
+        scale(&scaledIdleMin, idledNum);
     }
 
-    void calibrateIdleMax(){
-
+    void calibrateIdleMax(int idledNum){
+        scale(&scaledIdleMax, idledNum);
     }
 
-    //redundant function used for testing
+    //ideally call this value throughout process to automatically update flex sensor range
     void autoCalibrate() {
         if (rawValue > max) max = rawValue;
         if (rawValue < min) min = rawValue;
     }
 
     //scales sensor range to whatever user specifies it to be
-    void adjustScale(int newMax, int newMin){
+    void adjustScale(int newMin, int newMax){
+        scaledMax = newMax;
+        scaledMin = newMin;
 
+        scale(&scaledVal, rawValue);
     }
 
-    //scales range of values for flex sensor between newMin and newMax (ex: scaling a value to 0-100 will adjust that value to be within that range depending on assigned raw max and min)
-    int scaleValue(int newMin, int newMax) {
-        int range = max - min;
-        if (range == 0) range = 1;  //to eliminate divide by 0 error
-        int newRange = newMax - newMin;
+    int getRaw(){
+        return rawValue;
+    }
 
-        scaledValue = (((rawValue - min) * newRange) / range) + newMin;
-
-        return scaledValue;
+    int getScaled(){
+        return scaledVal;
     }
 
     //this requires actual calibration depending on user hand flex ranges
-    int flexCheck(int scaledVal){
-        if(scaledVal > 30 && scaledVal < 70){   //30 and 70 are arbitrary values, should be calibrated
+    int flexCheck(){
+        if(scaledVal > 30 && scaledVal <60){
             return 0;                           //this is idle state
         }
-        else if(scaledVal < 30){                //30 is arbitrary, should be calibrated
+        else if(scaledVal < 30){  
             return -1;                          //this is flexed state
         }
         else{
@@ -55,30 +60,68 @@ public:
         }
     }
 
+    //add a print function
+    void printRaw(){
+        Serial.printf("Flex at Pin %d has the value %d.", pin, rawValue);
+    }
+
+    void printScaled(){
+        Serial.printf("Flex at Pin %d has the scaled value from %d to %d of %d.",
+        pin,
+        scaledMin,
+        scaledMax,
+        scaledVal);
+    }
+
 private:
+    int rawValue;
+    int pin;
+
     int max = 0;
     int min = 10000;
 
-    int scaledValue;
+    int scaledVal;
     int scaledMax;
     int scaledMin;
 
-    int idleMin;
-    int idleMax;
+    int scaledIdleMin;    //raw sensor value indicating idle hand state post full flexion
+    int scaledIdleMax;    //raw sensor value indicating idle hand state post full extension
+
+    void scale(int* valueToScale, int input){
+        int range = max - min;
+        if (range == 0) range = 1;  //to eliminate divide by 0 error
+        int scaledRange = scaledMax - scaledMin;
+
+        *valueToScale = (((input - min) * (scaledRange)) / (range)) + scaledMin;
+    }
 };
 
-class tilt { //this class is gonna be removed as it is used mostly for testing the MPU6050s
-//tilt class must include data from two MPU6050s: forearm and hand, most likely the commands to be included under this class are relative values between the two modules
-//potentially, a new class will be made which uses the commands of tilt
+FlexSensor::FlexSensor(int pin){ //declare what adc pin it is connected on esp32
+    this->pin = pin;
+};
+
+class tiltSensor {
 //the following are the key motions of the wrist: flexion, extension, radial deviation, ulnar deviation, pronation and supination
 //the goal of this class is to classify what type of movements occured on the wrist using roll and pitch values from two MPU6050s
 public:
-    float pitch;
-    float roll;
+    std::string orientation;
 
-    std::string orientation = ""; //may have to switch to different data type
-    // range of motion of wrist will be relative values between the two roll and pitch values
-    // a real time capture of the MPU6050 value may be required but I believe this will be called on main.cpp instead
+    void setAccelValues(int16_t MPUax, int16_t MPUay, int16_t MPUaz){
+        ax = MPUax;
+        ay = MPUay;
+        az = MPUaz;
+
+        pitch = atan2(ax, sqrt(ay * ay + az * az)) * 180 / PI;
+        roll = atan2(-ay, az) * 180 / PI;
+    }
+
+    float getPitch(){
+        return pitch;
+    }
+
+    float getRoll(){
+        return roll;
+    }
 
     std::string classify(float roll, float pitch){
         //new command would involve degree of bending between the wrist and the hand
@@ -97,39 +140,68 @@ public:
         return orientation;
     }
 
+    //add a print function
+    void printOrientation(){
+        Serial.print("Orientation is ");
+        Serial.println(orientation.c_str());
+    }
+
+    void printPitch(){
+        Serial.printf("Pitch = %d\r\n", pitch);
+    }
+
+    void printRoll(){
+        Serial.printf("Roll = %d\r\n", roll);
+    }
+
     //will add code to calibrate orientations depending on user hand
     //this includes a relative max and min between the angles of the palm and wrist
-};
 
-//Wrist class
+private:
+    int16_t ax, ay, az;
+    int16_t gx, gy, gz;
 
-class WristSensor{
-public:
-    //definite values for forearm and hand MPU6050s
+    float pitch;
+    float roll;
 };
 
 //Gesture class
 class gesture {
 public:
-    void setGesture(std::string name, std::vector<int> fingerStates) {
-        this->name = name;                      //this may potentially be moved to base computer to save size
-        this->fingerStates = fingerStates;      //this is most likely the value being sent to base computer
+    gesture() {
+        this->name = "";
+        this->fingerStates = {0, 0, 0, 0, 0};
+    }
+
+    void setGesture(std::string name, std::vector<int> fingerNum) {
+        this->name = name;                      //this is the data that will be sent to the computer
+        this->fingerStates = fingerNum;      //this is most likely the value being sent to base computer
     }
 
     std::vector<int> getFingerStates() {
-        return fingerStates;
+        return this->fingerStates;
     }
 
-    std::string getName() {
+    std::string getName(){
         return name;
     }
 
-    std::string isThis(std::vector<int> flexion) {
-        if (flexion == fingerStates) {
-            return name;
+    void printFingerStates(){
+        Serial.print("Finger states for ");
+        Serial.print(this->name.c_str());
+        Serial.print(" is: ");
+        for (int i = 0; i < fingerStates.size(); i++){
+            Serial.printf("%d ",fingerStates[i]);
+        }
+        Serial.println("");
+    }
+
+    bool isThis(gesture Gesture4Comp) {
+        if (fingerStates == Gesture4Comp.getFingerStates()) {
+            return true;
         }
         else {
-            return "";
+            return false;
         }
     }
 
@@ -137,12 +209,14 @@ public:
 THERE SHOULD ALSO BE A SECTION HERE WHICH ACCOUNTS FOR THE GYROSCOPE DATAS WHICH MAY BE A CLASS OF ITS OWN
 */
 private:
-    std::string name = ""; //IF YOU WANT TO CHANGE THE DATA TYPE OF THE GESTURE, CHANGE IT HERE
-    std::vector<int> fingerStates = {0, 0, 0, 0, 0};
     //these following two classes most likely will be replaced by values which indicate the relative angles of the wrist (i.e. the degree of bending)
     //the following are the key motions of the wrist: flexion, extension, radial deviation, ulnar deviation, pronation and supination
-    tilt handTilt;
-    tilt wristTilt;
+/*     tiltSensor handTilt;
+    tiltSensor wristTilt; */
+
+    std::string name = ""; //IF YOU WANT TO CHANGE THE DATA TYPE OF THE GESTURE, CHANGE IT HERE
+    std::vector<int> fingerStates = {0, 0, 0, 0, 0};
+
 };
 
 #endif
