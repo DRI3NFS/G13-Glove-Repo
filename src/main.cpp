@@ -56,15 +56,15 @@
 //          V                     v
 //        drone 1               drone 2
 
-MPU6050 mpuHand(0x68);
+MPU6050 handMPU(0x68);
+MPU6050 foreMPU(0x69);
+
+int16_t handAx, handAy, handAz;
+int16_t foreAx, foreAy, foreAz;
+
 tiltSensor handTilt;
-MPU6050 mpuFore(0x69);
 tiltSensor foreTilt;
-/* 
-MPU6050 mpuFore(MPU6050_ADDRESS_AD0_HIGH); //usable register for AD0 high or second MPU6050
-int16_t foreax, foreay, foreaz;
-tilt foreOrient;
- */
+
 FlexSensor tmbFing(36); 
 FlexSensor indFing(39);
 FlexSensor midFing(34);
@@ -132,23 +132,22 @@ void setup(void) {
   Serial.begin(115200);
   Wire.begin();
 
-  mpuHand.initialize();
-  if(mpuHand.testConnection() ==  false){
-    Serial.println("MPU6050 connection failed");
-    while(true);
+  handMPU.initialize();
+  if(handMPU.testConnection() == false){
+    Serial.println("MPU Test for Hand Failed");
   }
   else{
-    Serial.println("MPU6050 connection successful");
+    Serial.println("MPU Test for Hand Successful");
   }
 
-  mpuFore.initialize();
-  if(mpuFore.testConnection() ==  false){
-    Serial.println("MPU6050 connection failed");
-    while(true);
+  foreMPU.initialize();
+  if(foreMPU.testConnection() == false){
+    Serial.println("MPU Test for Forearm Failed");
   }
   else{
-    Serial.println("MPU6050 connection successful");
+    Serial.println("MPU Test for Forearm Successful");
   }
+
 
   //The Gesture set should be defined in Gesture.h
   // Preset Gestures for now, signature will be replaced with non-string in Gesture.h
@@ -159,7 +158,6 @@ void setup(void) {
   GestureSet[4].setGesture("okay", {0, 0, 1, 1, 1});
   GestureSet[5].setGesture("idle", {0, 0, 0, 0, 0});
 
-  delay(1000);
 /*     delay(1000);
 
     //  Attempt to connect to Wi-Fi
@@ -301,35 +299,26 @@ void loop() {
     pnkFing.flexCheck()
   };
 
-  //values from mpu
-  int16_t axTemp, ayTemp, azTemp;
-  mpuHand.getAcceleration(&axTemp, &ayTemp, &azTemp);
+  handMPU.getAcceleration(&handAx, &handAy, &handAz);
+  foreMPU.getAcceleration(&foreAx, &foreAy, &foreAz);
 
-  Serial.print("Acceleration X: ");
-  Serial.print(axTemp);
-  Serial.print(" | Y: ");
-  Serial.print(ayTemp);
-  Serial.print(" | Z: ");
-  Serial.println(azTemp);
+  // Calculate roll and pitch for hand
+  handRoll = atan2(handAy, handAz) * 180 / PI;
+  handPitch = atan2(-handAx, sqrt(handAy * handAy + handAz * handAz)) * 180 / PI;
 
-  handTilt.setAccelValues(axTemp, ayTemp, azTemp);
-  handTilt.printRoll();
-  handTilt.printPitch();
+  // Calculate roll and pitch for forearm
+  foreRoll = atan2(foreAy, foreAz) * 180 / PI;
+  forePitch = atan2(-foreAx, sqrt(foreAy * foreAy + foreAz * foreAz)) * 180 / PI;
 
-  delay(10);
+  Serial.print("Hand Roll: ");
+  Serial.print(handRoll);
+  Serial.print(" Hand Pitch: ");
+  Serial.println(handPitch);
 
-  mpuFore.getAcceleration(&axTemp, &ayTemp, &azTemp);
-
-  Serial.print("Acceleration X: ");
-  Serial.print(axTemp);
-  Serial.print(" | Y: ");
-  Serial.print(ayTemp);
-  Serial.print(" | Z: ");
-  Serial.println(azTemp);
-
-  handTilt.setAccelValues(axTemp, ayTemp, azTemp);
-  handTilt.printRoll();
-  handTilt.printPitch();
+  Serial.print("Forearm Roll: ");
+  Serial.print(foreRoll);
+  Serial.print(" Forearm Pitch: ");
+  Serial.println(forePitch);
 
   currGest.setGesture("current gesture", flexion);
   currGest.printFingerStates();
@@ -349,7 +338,7 @@ if (!matchFound) {
 }
 
   Serial.println("");
-  delay(1000);
+  delay(100);
 
 /*
       Serial.println("Spinning...");
