@@ -12,7 +12,7 @@
 #include <Adafruit_BusIO_Register.h>
 #include <MPU6050.h>
 #include "Wire.h"
-#include "Gesture.h"
+#include <Glove.h>
 #include <vector>
 #include <string>
 
@@ -302,23 +302,21 @@ void loop() {
   handMPU.getAcceleration(&handAx, &handAy, &handAz);
   foreMPU.getAcceleration(&foreAx, &foreAy, &foreAz);
 
-  // Calculate roll and pitch for hand
-  handRoll = atan2(handAy, handAz) * 180 / PI;
-  handPitch = atan2(-handAx, sqrt(handAy * handAy + handAz * handAz)) * 180 / PI;
-
-  // Calculate roll and pitch for forearm
-  foreRoll = atan2(foreAy, foreAz) * 180 / PI;
-  forePitch = atan2(-foreAx, sqrt(foreAy * foreAy + foreAz * foreAz)) * 180 / PI;
+  handTilt.setAccelValues(handAx,handAy,handAz);
+  foreTilt.setAccelValues(foreAx,foreAy,foreAz);
 
   Serial.print("Hand Roll: ");
-  Serial.print(handRoll);
+  Serial.print(handTilt.getRoll());
   Serial.print(" Hand Pitch: ");
-  Serial.println(handPitch);
+  Serial.println(handTilt.getPitch());
 
   Serial.print("Forearm Roll: ");
-  Serial.print(foreRoll);
+  Serial.print(foreTilt.getRoll());
   Serial.print(" Forearm Pitch: ");
-  Serial.println(forePitch);
+  Serial.println(foreTilt.getPitch());
+
+  Serial.print("Hand is oriented with ");
+  Serial.println(handTilt.getOrientation().c_str());
 
   currGest.setGesture("current gesture", flexion);
   currGest.printFingerStates();
