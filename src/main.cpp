@@ -16,18 +16,15 @@
 #include <vector>
 #include <string>
 
-/* #include <stdio.h>
-#include <WiFi.h>
+#include <stdio.h>
 #include <micro_ros_arduino.h>
 #include <rmw_microros/rmw_microros.h> 
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <rclc/publisher.h>
-#include <rclc/subscription.h>
 #include <std_msgs/msg/string.h>
-#include <std_msgs/msg/int32.h>
-#include <std_msgs/msg/int32_multi_array.h> */
+#include <std_msgs/msg/u_int8_multi_array.h>
 
 // Code for MPU6050 sensor was referenced from the following repository: https://github.com/ElectronicCats/mpu6050/tree/master/examples
 // NOTE: accelerometer data values end up as estimates, if we were to leave the MPU6050 in a fixed position, we expect the outputs to be 0,0 and 9.8ms2 but it is not.
@@ -77,8 +74,8 @@ gesture GestureSet[6];
 float handRoll, handPitch;
 float foreRoll, forePitch;
 
-/*
-/* Hotspot 
+
+/* Hotspot */
 char* ssid = "edcel";
 char* pass = "edcel1234";
 char* agent_ip = "172.20.10.9";
@@ -93,16 +90,12 @@ rcl_node_t node;
 rcl_timer_t timer;
 
 //  Messages
-std_msgs__msg__Int32 incoming_msg;
-std_msgs__msg__Int32MultiArray msg;
-
-//  ROS 2 Topic Message for Subscribing
-//rcl_subscription_t subscriber;
+std_msgs__msg__UInt8MultiArray msg;
 
 //  ROS2 Topic Message for Publishing
 rcl_publisher_t publisher;
 
-int32_t data_array[5] = {10, 20, 30, 40, 50};
+uint8_t data_array[6] = {0,0,0,0,0,0};
 
 //  Timer callback function
 void publish_callback(rcl_timer_t* timer, int64_t last_call_time)
@@ -117,7 +110,7 @@ void publish_callback(rcl_timer_t* timer, int64_t last_call_time)
     //  Publish the message 
     if (rcl_publish(&publisher, &msg, NULL) == RCL_RET_OK)
     {
-      Serial.println("Array Published!");
+      Serial.println("Published!");
     }
     else 
     {
@@ -125,8 +118,6 @@ void publish_callback(rcl_timer_t* timer, int64_t last_call_time)
     }
     
 }
-
-*/
 
 void setup(void) {
   Serial.begin(115200);
@@ -158,17 +149,6 @@ void setup(void) {
   GestureSet[4].setGesture("okay", {0, 0, 1, 1, 1});
   GestureSet[5].setGesture("idle", {0, 0, 0, 0, 0});
 
-/*     delay(1000);
-
-    //  Attempt to connect to Wi-Fi
-    WiFi.begin(ssid, pass);
-    while(WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-        Serial.println(".");
-    }
-    Serial.println("\nConnected");
-
     //  Initialize micro-ROS transport
     set_microros_wifi_transports(ssid, pass, agent_ip, atoi(agent_port));
 
@@ -182,13 +162,8 @@ void setup(void) {
         Serial.println("Failed to connect to micro-ROS Agent");
     }
 
-    //  Print ESP32 Address
-    Serial.println("ESP32 IP Address");
-    Serial.println(WiFi.localIP());
-
     //  Initialize micro-ROS
     allocator = rcl_get_default_allocator();
-
 
     //  Initialize RCL init options 
     rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
@@ -244,8 +219,8 @@ void setup(void) {
     rclc_publisher_init_default(
       &publisher,
       &node,
-      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32MultiArray),
-      "esp32_glove"
+      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8MultiArray),
+      "/esp32_glove"
     );
 
     //  Create a timer (1 second period)
@@ -266,7 +241,7 @@ void setup(void) {
     msg.data.capacity = 0;
     
     Serial.println("microROS setup complete!");
-} */
+ 
 }
 
 void loop() {
@@ -305,22 +280,25 @@ void loop() {
   handTilt.setAccelValues(handAx,handAy,handAz);
   foreTilt.setAccelValues(foreAx,foreAy,foreAz);
 
-  Serial.print("Hand Roll: ");
-  Serial.print(handTilt.getRoll());
-  Serial.print(" Hand Pitch: ");
-  Serial.println(handTilt.getPitch());
-
-  Serial.print("Forearm Roll: ");
-  Serial.print(foreTilt.getRoll());
-  Serial.print(" Forearm Pitch: ");
-  Serial.println(foreTilt.getPitch());
-
   Serial.print("Hand is oriented with ");
   Serial.println(handTilt.getOrientation().c_str());
 
   currGest.setGesture("current gesture", flexion);
+  currGest.setHandOrientation(handTilt.getOrientation());
   currGest.printFingerStates();
 
+  //currGest.updateData(&data_array);
+  std::vector<uint8_t> dataToSend = currGest.dataToSend();
+  for (int i = 0; i< 6; i++)
+  {
+    data_array[i] = (uint8_t) dataToSend[i];
+  }
+
+  for (int i = 0; i < 6; i++){
+    Serial.print(dataToSend[i]);
+  }
+
+  Serial.println("");
 // Print the current gesture, this command should be transferred to Gesture.h
 bool matchFound = false;
 for (int i = 0; i < 6; i++) {
@@ -338,11 +316,10 @@ if (!matchFound) {
   Serial.println("");
   delay(100);
 
-/*
-      Serial.println("Spinning...");
-    //  Spin Executor
-    rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
+  Serial.println("Spinning...");
+  //  Spin Executor
+  rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
 
-    //  Delay to control publishing rate
-    delay(10); */
+  //  Delay to control publishing rate
+  delay(10); 
 }

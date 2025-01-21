@@ -267,7 +267,7 @@ public:
     //thumb up = 0, palm down = 1, thumb down = 2, palm up = 3, point down = 4, point up = 5
     std::vector<uint8_t> dataToSend(){
         for (int i = 0; i < 5; i++){
-            data[i] = fingerStates[i];
+            data[i] = (uint8_t) (fingerStates[i] + 1);
         }
         bool j;
         while(j){
