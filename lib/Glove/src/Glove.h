@@ -6,18 +6,45 @@
 #include <iostream>
 #include <Arduino.h>
 
-//i want to eventually implement these to standardize of the orientation values
-enum class orient{
-    UP,
-    FWD,
-    DWN
-};
+//FOR UNIVERSAL IDS OF GESTURE MESSAGE PACKET
+//ALL OF THESE VALUES ARE COMPLETELY ARBITRARY, THESE ARE MADE TO MAKE CODING EASIER
+//notes: to call from an enum class, you type "name of class"::"entry in class"
 
-enum class fingerState{
-    FLEX,
-    IDLE,
-    EXTD
-};
+//SIGNATURES FOR THE DIFFERENT HAND ORIENTATIONS
+#define FINGER_UP   0x01
+#define FINGER_DOWN 0x10
+#define THUMB_UP    0x02
+#define THUMB_DOWN  0x20
+#define PALM_UP     0x03
+#define PALM_DOWN   0x30
+
+//SIGNATURES FOR THE DIFFERENT FINGER FLEXION STATES
+#define FLEX 0x01
+#define IDLE 0x00
+#define EXTD 0x10
+
+//SIGNATURES FOR DRONE IDENTIFIERS
+#define DRN_1 0x01
+#define DRN_2 0x02
+#define DRN_3 0x03
+#define DRN_4 0x04
+#define DRN_5 0x05
+
+//SIGNATURES FOR CONTROLLER PHASE
+#define PHASE_CALIBRATION   0x00
+#define PHASE_SELECTION     0x01
+#define PHASE_CONTROL       0x11
+
+//LIST OF GESTURES this is probably gonna be moved to main.cpp or Glove.cpp
+#define GESTURE_POINT_FWD   {0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_POINT_DWN   {0x02, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_POINT_UP    {0x03, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_POINT_LEFT  {0x04, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_POINT_RIGHT {0x05, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_AGREE       {0x06, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_DISAGREE    {0x07, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_STOP        {0x08, 0x00, 0x00, 0x00, 0x00, 0x00}
+#define GESTURE_IDLE        {0x09, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 class FlexSensor {
 public:
@@ -61,15 +88,15 @@ public:
     }
 
     //this requires actual calibration depending on user hand flex ranges
-    int flexCheck(){
-        if(scaledVal > 30 && scaledVal <60){
-            return 0;                           //this is idle state
+    uint8_t flexCheck(){
+        if(scaledVal > 60){
+            return EXTD;  //this is extended
         }
         else if(scaledVal < 30){  
-            return -1;                          //this is flexed state
+            return FLEX;  //this is flexed state
         }
         else{
-            return 1;                           //this is extended state
+            return IDLE;  //this is idle state
         }
     }
 

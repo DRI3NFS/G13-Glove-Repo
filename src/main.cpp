@@ -11,8 +11,8 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BusIO_Register.h>
 #include <MPU6050.h>
-#include "Wire.h"
-#include <Glove.h>
+#include <Wire.h>
+#include "Glove.h"
 #include <vector>
 #include <string>
 
