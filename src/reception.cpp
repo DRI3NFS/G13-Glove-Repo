@@ -18,62 +18,87 @@
 #include "Glove.h"
 #include <iostream>
 #include <string>
+#include <vector>
 
-uint32_t dataPackage;                       //This is the data from the glove received from by the computer
-uint8_t thumb, index, middle, ring, pinky;  //Flexion data from the glove
-uint8_t orientation;                        //Orientation data from the glove
-uint8_t phase;                              //Current phase of the glove
-uint8_t droneID;                            //Drone IDs to use for selection
+uint8_t gloveData;                                //This is the data from the glove received from by the computer
+uint8_t phase = PHASE_CONTROL;                      //Current phase of the glove
+uint8_t droneID;                                    //Drone IDs to use for selection
+
+//the gesture set up can be moved to Glove.cpp on the communicating computer
+//Set up all gestures, gestures declared here are all standardized and are not assigned to specific commands
+gesture pointUp;
+gesture pointDown;
+gesture pointForward;
+gesture thumbsBack;
+gesture thumbsLeft;
+gesture thumbsRight;
+gesture thumbsDown;
+gesture bird;
 
 void setup(void){
-    //the gesture set up can be moved to Glove.cpp on the communicating computer
-    //Set up all gestures, gestures declared here are all standardized and are not assigned to specific commands
-    gesture pointUp; 
-    pointUp.addAllowedOrientation("FINGER_UP");
+    pointUp.setOrientation(FINGER_UP);
     pointUp.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
 
-    gesture pointDown;
-    pointDown.addAllowedOrientation("FINGER_DOWN");
+    pointDown.setOrientation(FINGER_DOWN);
     pointDown.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
 
-    gesture pointForward;
-    pointForward.addAllowedOrientation("PALM_DOWN");
-    //the rest of these assignments are optional and can be removed if it makes gesture sorting easier
-    pointForward.addAllowedOrientation("THUMB_UP");
-    pointForward.addAllowedOrientation("THUMB_DOWN");
-    pointForward.addAllowedOrientation("PALM_UP");
+    pointForward.setOrientation(THUMB_UP);
     pointForward.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
 
-    gesture thumbsLeft;
-    thumbsLeft.addAllowedOrientation("PALM_DOWN");
+    thumbsBack.setOrientation(FINGER_UP);
+    thumbsBack.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
+
+    thumbsLeft.setOrientation(PALM_DOWN);
     thumbsLeft.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
 
-    gesture thumbsRight;
-    thumbsRight.addAllowedOrientation("PALM_UP");
+    thumbsRight.setOrientation(PALM_UP);
     thumbsRight.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
 
-    gesture thumbsDown;
-    thumbsDown.addAllowedOrientation("THUMB_DOWN");
+    thumbsDown.setOrientation(THUMB_DOWN);
     thumbsDown.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
 
-    gesture bird;
-    bird.addAllowedOrientation("FINGER_UP");
+    bird.setOrientation(FINGER_UP);
     bird.setFingerStates(FLEX,FLEX,EXTD,FLEX,FLEX);
 }
 
 void loop() {
-    //unpack the data package
-    //extract flexion data
-    thumb   = extractBits(dataPackage, 15, 2);
-    index   = extractBits(dataPackage, 23, 2);
-    middle  = extractBits(dataPackage, 21, 2);
-    ring    = extractBits(dataPackage, 19, 2);
-    pinky   = extractBits(dataPackage, 17, 2);
+    switch(phase){
+        case PHASE_CALIBRATION:
+            //Code for calibrating the glove this will most likely get moved to the glove main.cpp
+            break;
+        case PHASE_SELECTION:
+            //Code for selecting which drone to use
+            break;
+        case PHASE_CONTROL:
+            //Control code here
+            DroneCommand command;
 
-    //unpack orientation data
-    orientation = extractBits(dataPackage, 9, 6);
+            if(pointUp.checkGesture(gloveData)){
+                command = CMD_ASCEND;
+            }
+            else if(pointDown.checkGesture(gloveData)){
+                command = CMD_DESCEND;
+            }
+            else if(pointForward.checkGesture(gloveData)){
+                command = CMD_FORWARD;
+        
+            }
+            else if(thumbsLeft.checkGesture(gloveData)){
+                command = CMD_LEFT;
+            }
+            else if(thumbsRight.checkGesture(gloveData)){
+                command = CMD_RIGHT;
+            }
+            else if(thumbsDown.checkGesture(gloveData)){
+                command = CMD_REGULAR_SHUTOFF;
+            }
+            else if(bird.checkGesture(gloveData)){
+                command = CMD_EMERGENCY_SHUTOFF;
+            }
+            else{
+            //return drone float state;
+            }
+            //Send command to drone
 
-    //unpack current phase
-    phase = extractBits(dataPackage, 7, 2);
-    droneID = extractBits(dataPackage, 1, 4);
+    }
 }

@@ -7,16 +7,13 @@
 #include <Arduino.h>
 
 //FOR UNIVERSAL IDS OF GESTURE MESSAGE PACKET
-//ALL OF THESE VALUES ARE COMPLETELY ARBITRARY, THESE ARE MADE TO MAKE CODING EASIER
-//notes: to call from an enum class, you type "name of class"::"entry in class"
-
 // Defines for the different hand orientations
 #define FINGER_UP   0b00000001
-#define FINGER_DOWN 0b00000010
-#define THUMB_UP    0b00000100
-#define THUMB_DOWN  0b00001000
-#define PALM_UP     0b00010000
-#define PALM_DOWN   0b00100000
+#define FINGER_DOWN 0b00000110
+#define THUMB_UP    0b00000010
+#define THUMB_DOWN  0b00000101
+#define PALM_UP     0b00000100
+#define PALM_DOWN   0b00000011
 
 // Defines for the different finger flexion states
 #define FLEX 0x00
@@ -27,6 +24,7 @@
 #define DRN_2 0b00000010
 #define DRN_3 0b00000100
 #define DRN_4 0b00001000
+#define DRN_5 0b00010000
 
 // Defines for controller phase
 #define PHASE_CALIBRATION 0x01
@@ -45,11 +43,6 @@ typedef enum {
     CMD_EMERGENCY_SHUTOFF,
     CMD_INVALID
 } DroneCommand;
-
-//Extract certain bits from data package, args are dataPackage, position of first bit, and length of data to extract
-uint8_t extractBits(uint32_t dataPackage, uint8_t position, uint8_t length){
-    return (dataPackage >> (position - 1)) & (0xFF << (32 - length));
-}
 
 //Omitted idle state since hardly realizable on glove
 class FlexSensor {
@@ -196,19 +189,9 @@ public:
         };
     }
 
-    void printPitch(){
-        Serial.printf("Pitch = %d\r\n degrees", pitch);
-    }
-
-    void printRoll(){
-        Serial.printf("Roll = %d\r\n degrees", roll);
-    }
-
 private:    
     uint8_t orientation;
-
     int16_t ax, ay, az;
-    int16_t gx, gy, gz;
 
     float pitch;
     float roll;
@@ -224,53 +207,47 @@ public:
     ~gesture() {}       //deconstructor
 
     //Add an allowed hand orientation for this gesture. This is for gestures that can have multiple hand orientations.
-    void addAllowedOrientation(std::string orientation){
-        allowedOrientations.push_back(orientation);
+    void setOrientation(uint8_t orientation){
+        sensorData = sensorData + orientation;  //this assumes that the sensorData will always have the last bits available to input orientation
     }
 
     //Set the flexion states of the fingers for this gesture. The order is thumb, index, middle, ring, pinky.
     void setFingerStates(uint8_t thumb, uint8_t index, uint8_t middle, uint8_t ring, uint8_t pinky) {
-        fingerStates[0] = thumb;
-        fingerStates[1] = index;
-        fingerStates[2] = middle;
-        fingerStates[3] = ring;
-        fingerStates[4] = pinky;
+        uint8_t fingerHandle = 0xFF;    
+        sensorData = sensorData & 0x07; //clear first 5 bits
+
+        fingerHandle = fingerHandle & (thumb << 3);
+        fingerHandle = fingerHandle & (index << 7);
+        fingerHandle = fingerHandle & (middle << 6);
+        fingerHandle = fingerHandle & (ring << 5);
+        fingerHandle = fingerHandle & (pinky << 4);
+
+        sensorData = sensorData + fingerHandle;
     }
 
-    //Get the flexion states of the fingers for this gesture.
-    void getFingerStates(uint8_t array[5]) {
-        array = fingerStates;
+    //Get the name of the gesture
+    std::string getName() {
+        return name;
     }
 
-    //Get the flexion state of the thumb.
-    uint8_t getThumbState() {
-        return fingerStates[0];
+    //Get the sensor data of the gesture
+    uint8_t getSensorData() {
+        return sensorData;
     }
 
-    //Get the flexion state of the index finger.
-    uint8_t getIndexFingerState() {
-        return fingerStates[1];
-    }
-
-    //Get the flexion state of the middle finger.
-    uint8_t getMiddleFingerState() {
-        return fingerStates[2];
-    }
-
-    //Get the flexion state of the ring finger.
-    uint8_t getRingFingerState() {
-        return fingerStates[3];
-    }
-
-    //Get the flexion state of the pinky finger.
-    uint8_t getPinkyFingerState() {
-        return fingerStates[4];
+    //Check if the gesture matches the current gesture
+    bool checkGesture(uint8_t currentGesture) {
+        if (currentGesture == sensorData) {
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 
 private:
-    std::string name = "Null Gesture";
-    uint8_t fingerStates[5] = {0,0,0,0,0};
-    std::vector<std::string> allowedOrientations;
+    std::string name = NULL;
+    uint8_t sensorData;        //Sensor data formatted such that the first 5 bits are the finger states and the last 3 bits are the hand orientation
 };
 
 #endif
