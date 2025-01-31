@@ -1,5 +1,5 @@
-#ifndef Glove.h
-#define Glove.h
+#ifndef GLOVE_H
+#define GLOVE_H
 
 #include <vector>
 #include <string>
@@ -10,42 +10,48 @@
 //ALL OF THESE VALUES ARE COMPLETELY ARBITRARY, THESE ARE MADE TO MAKE CODING EASIER
 //notes: to call from an enum class, you type "name of class"::"entry in class"
 
-//SIGNATURES FOR THE DIFFERENT HAND ORIENTATIONS
-#define FINGER_UP   0x01
-#define FINGER_DOWN 0x10
-#define THUMB_UP    0x02
-#define THUMB_DOWN  0x20
-#define PALM_UP     0x03
-#define PALM_DOWN   0x30
+// Defines for the different hand orientations
+#define FINGER_UP   0b00000001
+#define FINGER_DOWN 0b00000010
+#define THUMB_UP    0b00000100
+#define THUMB_DOWN  0b00001000
+#define PALM_UP     0b00010000
+#define PALM_DOWN   0b00100000
 
-//SIGNATURES FOR THE DIFFERENT FINGER FLEXION STATES
-#define FLEX 0x01
-#define IDLE 0x00
-#define EXTD 0x10
+// Defines for the different finger flexion states
+#define FLEX 0x00
+#define EXTD 0x01
 
-//SIGNATURES FOR DRONE IDENTIFIERS
-#define DRN_1 0x01
-#define DRN_2 0x02
-#define DRN_3 0x03
-#define DRN_4 0x04
-#define DRN_5 0x05
+// Defines for drone identifiers
+#define DRN_1 0b00000001
+#define DRN_2 0b00000010
+#define DRN_3 0b00000100
+#define DRN_4 0b00001000
 
-//SIGNATURES FOR CONTROLLER PHASE
-#define PHASE_CALIBRATION   0x00
-#define PHASE_SELECTION     0x01
-#define PHASE_CONTROL       0x11
+// Defines for controller phase
+#define PHASE_CALIBRATION 0x01
+#define PHASE_SELECTION   0x02
+#define PHASE_CONTROL     0x03
 
-//LIST OF GESTURES this is probably gonna be moved to main.cpp or Glove.cpp
-#define GESTURE_POINT_FWD   {0x01, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_POINT_DWN   {0x02, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_POINT_UP    {0x03, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_POINT_LEFT  {0x04, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_POINT_RIGHT {0x05, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_AGREE       {0x06, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_DISAGREE    {0x07, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_STOP        {0x08, 0x00, 0x00, 0x00, 0x00, 0x00}
-#define GESTURE_IDLE        {0x09, 0x00, 0x00, 0x00, 0x00, 0x00}
+//Commands for controlling the drone
+typedef enum {
+    CMD_LEFT,
+    CMD_RIGHT,
+    CMD_FORWARD,
+    CMD_BACK,
+    CMD_ASCEND,
+    CMD_DESCEND,
+    CMD_REGULAR_SHUTOFF,
+    CMD_EMERGENCY_SHUTOFF,
+    CMD_INVALID
+} DroneCommand;
 
+//Extract certain bits from data package, args are dataPackage, position of first bit, and length of data to extract
+uint8_t extractBits(uint32_t dataPackage, uint8_t position, uint8_t length){
+    return (dataPackage >> (position - 1)) & (0xFF << (32 - length));
+}
+
+//Omitted idle state since hardly realizable on glove
 class FlexSensor {
 public:
     //constructor
@@ -54,21 +60,7 @@ public:
     //update raw value
     void updateRaw(){   //must be updated to automatically read from pin within header rather from main.cpp
         rawValue = analogRead(pin);
-    }
-
-    //manual calibration must also be implemented for when a user has to manually calibrate sensors
-    void calibrateIdleMin(int idledNum){
-        scale(&scaledIdleMin, idledNum);
-    }
-
-    void calibrateIdleMax(int idledNum){
-        scale(&scaledIdleMax, idledNum);
-    }
-
-    //ideally call this value throughout process to automatically update flex sensor range
-    void autoCalibrate() {
-        if (rawValue > max) max = rawValue;
-        if (rawValue < min) min = rawValue;
+        this->autoCalibrate();
     }
 
     //scales sensor range to whatever user specifies it to be
@@ -92,11 +84,11 @@ public:
         if(scaledVal > 60){
             return EXTD;  //this is extended
         }
-        else if(scaledVal < 30){  
+        else if(scaledVal <= 60){  
             return FLEX;  //this is flexed state
         }
         else{
-            return IDLE;  //this is idle state
+            return 0;     //this is an error state
         }
     }
 
@@ -114,6 +106,19 @@ public:
     }
 
 private:
+    void autoCalibrate() {
+        if (rawValue > max) max = rawValue;
+        if (rawValue < min) min = rawValue;
+    }
+
+    void scale(int* valueToScale, int input){
+        int range = max - min;
+        if (range == 0) range = 1;  //to eliminate divide by 0 error
+        int scaledRange = scaledMax - scaledMin;
+
+        *valueToScale = (((input - min) * (scaledRange)) / (range)) + scaledMin;
+    }
+
     int rawValue;
     int pin;
 
@@ -123,17 +128,6 @@ private:
     int scaledVal;
     int scaledMax;
     int scaledMin;
-
-    int scaledIdleMin;    //raw sensor value indicating idle hand state post full flexion
-    int scaledIdleMax;    //raw sensor value indicating idle hand state post full extension
-
-    void scale(int* valueToScale, int input){
-        int range = max - min;
-        if (range == 0) range = 1;  //to eliminate divide by 0 error
-        int scaledRange = scaledMax - scaledMin;
-
-        *valueToScale = (((input - min) * (scaledRange)) / (range)) + scaledMin;
-    }
 };
 
 FlexSensor::FlexSensor(int pin){ //declare what adc pin it is connected on esp32
@@ -142,7 +136,7 @@ FlexSensor::FlexSensor(int pin){ //declare what adc pin it is connected on esp32
 
 class tiltSensor {
 //the following are the key motions of the wrist: flexion, extension, radial deviation, ulnar deviation, pronation and supination
-//the goal of this class is to classify what type of movements occured on the wrist using roll and pitch values from two MPU6050s
+//radial and ulnar deviation would require either a magnetometer to detect so will be dropped for now
 public:
     void setAccelValues(int16_t MPUax, int16_t MPUay, int16_t MPUaz){
         ax = MPUax;
@@ -165,59 +159,53 @@ public:
     //these values are assigned for right hand orientations with your arm pointing forward
     //all of these values purely depend on my own arm's range of motion and are arbitrary
     //thumb up, thumb down, palm down, palm up, point down, point up
-    std::string getOrientation(){
+    uint8_t getOrientation(){
         if(roll <= -45 && roll >= -135 && pitch >= -45 && pitch <= 45){
-            orientation = "thumb up";
+            orientation = THUMB_UP;
             return orientation;
         }
 
         else if(roll <= 45 && roll >= -45 && pitch >= -45 && pitch <= 45){
-            orientation = "palm down";
+            orientation = PALM_DOWN;
             return orientation;
         }
 
         else if(roll <= 135 && roll >= 45 && pitch >= -45 && pitch <= 45){
-            orientation = "thumb down";
+            orientation = THUMB_UP;
             return orientation;
         }
 
         else if( ((roll <= -135 && roll >=-180)||(roll <= 180 && roll >= 135)) && pitch >= -45 && pitch <= 45){
-            orientation = "palm up";
+            orientation = PALM_UP;
             return orientation;
         }
 
         if(pitch <= -45){
-            orientation = "pointed down";
+            orientation = FINGER_DOWN;
             return orientation;
         }
 
         else if(pitch >= 45){
-            orientation = "pointed up";
+            orientation = FINGER_UP;
             return orientation;
         }
 
         else{
-            orientation = "no assigned orientation";
+            orientation = NULL;
             return orientation;
         };
     }
 
-    //add a print function
-    void printOrientation(){
-        Serial.print("Orientation is ");
-        Serial.println(orientation.c_str());
-    }
-
     void printPitch(){
-        Serial.printf("Pitch = %d\r\n", pitch);
+        Serial.printf("Pitch = %d\r\n degrees", pitch);
     }
 
     void printRoll(){
-        Serial.printf("Roll = %d\r\n", roll);
+        Serial.printf("Roll = %d\r\n degrees", roll);
     }
 
 private:    
-    std::string orientation;
+    uint8_t orientation;
 
     int16_t ax, ay, az;
     int16_t gx, gy, gz;
@@ -226,137 +214,63 @@ private:
     float roll;
 };
 
-//Gesture class, the idea is that this code will collect all translated values from the sensor to a smaller data type ie an array of integers
+//Gesture class
+//This class is now repurposed to be a means of categorizing gestures and comparing them to the current gesture
+//This class also includes the command equivalent of the assigned gesture
 class gesture {
 public:
-    gesture() {
-        name = "";
-        fingerStates = {0, 0, 0, 0, 0};
-        orientations = {"", ""};
+    //Create a gesture object with a name and a set of finger states.
+    gesture() {}        //constructor
+    ~gesture() {}       //deconstructor
+
+    //Add an allowed hand orientation for this gesture. This is for gestures that can have multiple hand orientations.
+    void addAllowedOrientation(std::string orientation){
+        allowedOrientations.push_back(orientation);
     }
 
-    void setGesture(std::string name, std::vector<int> fingerNum) {
-        this->name = name;                      //this is the data that will be sent to the computer
-        this->fingerStates = fingerNum;      //this is most likely the value being sent to base computer
+    //Set the flexion states of the fingers for this gesture. The order is thumb, index, middle, ring, pinky.
+    void setFingerStates(uint8_t thumb, uint8_t index, uint8_t middle, uint8_t ring, uint8_t pinky) {
+        fingerStates[0] = thumb;
+        fingerStates[1] = index;
+        fingerStates[2] = middle;
+        fingerStates[3] = ring;
+        fingerStates[4] = pinky;
     }
 
-    void setHandOrientation(std::string orient){
-        this->orientations[0] = orient;
+    //Get the flexion states of the fingers for this gesture.
+    void getFingerStates(uint8_t array[5]) {
+        array = fingerStates;
     }
 
-    std::vector<int> getFingerStates() {
-        return this->fingerStates;
+    //Get the flexion state of the thumb.
+    uint8_t getThumbState() {
+        return fingerStates[0];
     }
 
-    std::string getHandOrientation(){
-        return orientations[0];
+    //Get the flexion state of the index finger.
+    uint8_t getIndexFingerState() {
+        return fingerStates[1];
     }
 
-    std::string getForearmOrientation(){
-        return orientations[1];
+    //Get the flexion state of the middle finger.
+    uint8_t getMiddleFingerState() {
+        return fingerStates[2];
     }
 
-    std::string getName(){
-        return name;
+    //Get the flexion state of the ring finger.
+    uint8_t getRingFingerState() {
+        return fingerStates[3];
     }
 
-    void printFingerStates(){
-        Serial.print("Finger states for ");
-        Serial.print(this->name.c_str());
-        Serial.print(" is: ");
-        for (int i = 0; i < fingerStates.size(); i++){
-            Serial.printf("%d ",fingerStates[i]);
-        }
-        Serial.println("");
-    }
-    
-    void printOrientations(){
-        Serial.print("Hand and Forearm Orientation for ");
-        Serial.print(this->name.c_str());
-        Serial.print(" are: ");
-        Serial.print(orientations[0].c_str());
-        Serial.print(" and ");
-        Serial.print(orientations[1].c_str());
-        Serial.println("");
-    }
-
-    //this is currently designed to only account for hand orientation, not forearm (assume that for now gestures are independent from the forearm motion)
-    bool isThis(gesture Gesture4Comp) {
-        if(this->checkFlex(Gesture4Comp.getFingerStates())
-        && this->checkOrientHand(Gesture4Comp.getHandOrientation())){
-            return true;
-        }
-        else{
-            return false;
-        }
-    }
-
-    //thumb up = 0, palm down = 1, thumb down = 2, palm up = 3, point down = 4, point up = 5
-    std::vector<uint8_t> dataToSend(){
-        for (int i = 0; i < 5; i++){
-            data[i] = (uint8_t) (fingerStates[i] + 1);
-        }
-        bool j;
-        while(j){
-            if(this->orientations[1] == "thumb up"){
-                data[5] = 0;
-                j = false;
-            }
-            else if(this->orientations[1] == "palm down"){
-                data[5] = 1;
-                j = false;
-            }
-            else if(this->orientations[1] == "thumb down"){
-                data[5] = 2;
-                j = false;
-            }
-            else if(this->orientations[1] == "palm up"){
-                data[5] = 3;
-                j = false;
-            }
-            else if(this->orientations[1] == "pointed down"){
-                data[5] = 4;
-                j = false;
-            }
-            else if(this->orientations[1] == "pointed up"){
-                data[5] = 5;
-                j = false;
-            }
-            else {
-                data[5] = 6; // no assigned orientation
-                j = false;
-            }
-        }
-        return data;
+    //Get the flexion state of the pinky finger.
+    uint8_t getPinkyFingerState() {
+        return fingerStates[4];
     }
 
 private:
-    bool checkFlex(std::vector<int> fingerStatesRef){
-        if (fingerStates == fingerStatesRef){
-            return true;
-        }
-        else{
-            return false;
-        }
-    }
-
-    bool checkOrientHand(std::string handOrient){
-        if (orientations[0] == handOrient){
-            return true;
-        }
-        else{
-            false;
-        }
-    }
-
-    std::string name; //IF YOU WANT TO CHANGE THE DATA TYPE OF THE GESTURE, CHANGE IT HERE
-    std::vector<int> fingerStates = {0,0,0,0,0};
-    
-    tiltSensor handTilt;
-    tiltSensor wristTilt;
-
-    std::vector<std::string> orientations = {"",""}; // first element is hand, second element is forearm
-    std::vector<uint8_t> data = {0,0,0,0,0,0};
+    std::string name = "Null Gesture";
+    uint8_t fingerStates[5] = {0,0,0,0,0};
+    std::vector<std::string> allowedOrientations;
 };
 
 #endif

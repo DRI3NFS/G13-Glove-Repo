@@ -53,27 +53,35 @@
 //          V                     v
 //        drone 1               drone 2
 
+// Declare MPU6050 objects for the hand
 MPU6050 handMPU(0x68);
-MPU6050 foreMPU(0x69);
-
 int16_t handAx, handAy, handAz;
-int16_t foreAx, foreAy, foreAz;
 
-tiltSensor handTilt;
-tiltSensor foreTilt;
-
+// Declare sensors for the fingers and hand orientation
 FlexSensor tmbFing(36); 
 FlexSensor indFing(39);
 FlexSensor midFing(34);
 FlexSensor rngFing(35);
 FlexSensor pnkFing(32);
+tiltSensor handTilt;
 
-gesture currGest;
-gesture GestureSet[6];
-
-float handRoll, handPitch;
-float foreRoll, forePitch;
-
+//The data package to be sent will be 32 bits long, divided into 4 bytes
+//  >the second byte will contain the flexion data of the four nun-thumb fingers, 
+//    >each finger is assigned two bits
+//    >the order is: index, middle, ring, pinky (from most significant to least significant)
+//  >the third byte will contain the flexion data of the thumb and the hand orientation, 
+//    >the thumb will have the two most significant bits
+//    >the hand orientation will be among the 6 remaining bits, each bit assigned an orientation
+//  >the fourth byte will contain the current stage of the code and the drone ID
+//    >the stage will be the two most significant byte
+//    >the drone ID will be the six least significant byte
+//  >the first byte will be empty, reserved for future use
+//An example would be say you want to deliver a thumbs up gesture, that is all fingers except the thumb are flexed,
+//the hand is oriented "THUMB_UP", the code is in the "PHASE_CONTROL" stage and the drone ID is DRN1 and DRN3
+//the data package would be: 0b01010101 0b10000010 0b01000101 0b00000000 or 0x55 0x82 0x45 0x00
+uint32_t dataPackage;       //THIS IS THE DATA PACKAGE THAT WILL BE SENT TO THE COMPUTER
+uint8_t currentPhase = PHASE_CONTROL; //The current phase of the code
+uint8_t droneID = DRN_1 + DRN_2;      //The drone ID
 
 /* Hotspot */
 char* ssid = "edcel";
@@ -95,16 +103,14 @@ std_msgs__msg__UInt8MultiArray msg;
 //  ROS2 Topic Message for Publishing
 rcl_publisher_t publisher;
 
-uint8_t data_array[6] = {0,0,0,0,0,0};
-
 //  Timer callback function
 void publish_callback(rcl_timer_t* timer, int64_t last_call_time)
 {
     if (timer == NULL) return;
 
     //  Fill the message
-    msg.data.data = data_array;
-    msg.data.size = sizeof(data_array) / sizeof(data_array[0]);
+    msg.data.data = dataPackage;
+    msg.data.size = sizeof(dataPackage) / sizeof(dataPackage[0]);
     msg.data.capacity = msg.data.size;
 
     //  Publish the message 
@@ -130,7 +136,7 @@ void setup(void) {
   else{
     Serial.println("MPU Test for Hand Successful");
   }
-
+/* 
   foreMPU.initialize();
   if(foreMPU.testConnection() == false){
     Serial.println("MPU Test for Forearm Failed");
@@ -138,16 +144,7 @@ void setup(void) {
   else{
     Serial.println("MPU Test for Forearm Successful");
   }
-
-
-  //The Gesture set should be defined in Gesture.h
-  // Preset Gestures for now, signature will be replaced with non-string in Gesture.h
-  GestureSet[0].setGesture("agree", {1, -1, -1, -1, -1});
-  GestureSet[1].setGesture("point", {-1, 1, -1, -1, -1});
-  GestureSet[2].setGesture("promise", {-1, -1, -1, -1, 1});
-  GestureSet[3].setGesture("peace", {-1, 1, 1, -1, -1});
-  GestureSet[4].setGesture("okay", {0, 0, 1, 1, 1});
-  GestureSet[5].setGesture("idle", {0, 0, 0, 0, 0});
+ */
 
     //  Initialize micro-ROS transport
     set_microros_wifi_transports(ssid, pass, agent_ip, atoi(agent_port));
@@ -241,7 +238,6 @@ void setup(void) {
     msg.data.capacity = 0;
     
     Serial.println("microROS setup complete!");
- 
 }
 
 void loop() {
@@ -252,13 +248,6 @@ void loop() {
   rngFing.updateRaw();
   pnkFing.updateRaw();
 
-  // Calibrate flex sensors, this is to get more accurate max and min values for the sensors reducing effects of variability
-  tmbFing.autoCalibrate();
-  indFing.autoCalibrate();
-  midFing.autoCalibrate();
-  rngFing.autoCalibrate();
-  pnkFing.autoCalibrate();
-
   // Scale the raw values to a range of 0-100
   tmbFing.adjustScale(0, 100);
   indFing.adjustScale(0, 100);
@@ -266,53 +255,36 @@ void loop() {
   rngFing.adjustScale(0, 100);
   pnkFing.adjustScale(0, 100);
 
-  std::vector<int> flexion = {
-    tmbFing.flexCheck(),
-    indFing.flexCheck(),
-    midFing.flexCheck(),
-    rngFing.flexCheck(),
-    pnkFing.flexCheck()
-  };
-
+  // Get the acceleration values from the MPU6050
   handMPU.getAcceleration(&handAx, &handAy, &handAz);
-  foreMPU.getAcceleration(&foreAx, &foreAy, &foreAz);
-
   handTilt.setAccelValues(handAx,handAy,handAz);
-  foreTilt.setAccelValues(foreAx,foreAy,foreAz);
 
-  Serial.print("Hand is oriented with ");
-  Serial.println(handTilt.getOrientation().c_str());
-
-  currGest.setGesture("current gesture", flexion);
-  currGest.setHandOrientation(handTilt.getOrientation());
-  currGest.printFingerStates();
-
-  //currGest.updateData(&data_array);
-  std::vector<uint8_t> dataToSend = currGest.dataToSend();
-  for (int i = 0; i< 6; i++)
-  {
-    data_array[i] = (uint8_t) dataToSend[i];
-  }
-
-  for (int i = 0; i < 6; i++){
-    Serial.print(dataToSend[i]);
-  }
-
-  Serial.println("");
-// Print the current gesture, this command should be transferred to Gesture.h
-bool matchFound = false;
-for (int i = 0; i < 6; i++) {
-  if (currGest.isThis(GestureSet[i])) {
-    Serial.print("Matched Gesture: ");
-    Serial.println(GestureSet[i].getName().c_str());
-    matchFound = true;
-    break;
-  }
-}
-if (!matchFound) {
-  Serial.println("No Match");
-}
-
+  //Package the data to be sent                       Example data: ROCK-ON GESTURE 🤘
+  dataPackage = dataPackage + indFing.flexCheck();    //add index finger  : ex 0x01 (EXTD)
+                                                      //dataPackage = 00000000 00000000 00000000 00000001
+  dataPackage = dataPackage << 2;
+  dataPackage = dataPackage + midFing.flexCheck();    //add middle finger : ex 0x00 (FLEX)
+                                                      //dataPackage = 00000000 00000000 00000000 00000100
+  dataPackage = dataPackage << 2;
+  dataPackage = dataPackage + rngFing.flexCheck();    //add ring finger   : ex 0x00 (FLEX)
+                                                      //dataPackage = 00000000 00000000 00000000 00010000
+  dataPackage = dataPackage << 2;
+  dataPackage = dataPackage + pnkFing.flexCheck();    //add pinky finger  : ex 0x01 (EXTD)
+                                                      //dataPackage = 00000000 00000000 00000000 01000001
+  dataPackage = dataPackage << 2;
+  dataPackage = dataPackage + tmbFing.flexCheck();    //add thumb         : ex 0x01 (EXTD)
+                                                      //dataPackage = 00000000 00000000 00000001 00000100
+  dataPackage = dataPackage << 6;
+  dataPackage = dataPackage + handTilt.getOrientation();  //add hand orientation : ex 0b00000001 (FINGER_UP)
+                                                      //dataPackage = 00000000 00000000 01000001 01000001
+  dataPackage = dataPackage << 2;
+  dataPackage = dataPackage + currentPhase;           //add current phase : ex 0x03 (PHASE_CONTROL)
+                                                      //dataPackage = 00000000 00000001 00000101 00000111
+  dataPackage = dataPackage << 6;
+  dataPackage = dataPackage + droneID;                //add drone ID : ex 0x03 (DRN_1 + DRN_2)
+                                                      //dataPackage = 00000000 01000001 01000001 11000011
+                                                      //final dataPackage is 0x00 0x41 0x41 0xC3 which is equivalent to the rock-on
+  
   Serial.println("");
   delay(100);
 
