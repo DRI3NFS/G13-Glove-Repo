@@ -26,11 +26,6 @@
 #define DRN_4 0b00001000
 #define DRN_5 0b00010000
 
-// Defines for controller phase
-#define PHASE_CALIBRATION 0x01
-#define PHASE_SELECTION   0x02
-#define PHASE_CONTROL     0x03
-
 //Commands for controlling the drone
 typedef enum {
     CMD_LEFT,

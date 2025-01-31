@@ -21,8 +21,14 @@
 #include <vector>
 
 uint8_t gloveData;                                //This is the data from the glove received from by the computer
-uint8_t phase = PHASE_CONTROL;                      //Current phase of the glove
 uint8_t droneID;                                    //Drone IDs to use for selection
+
+enum phase{
+    PHASE_SELECTION,
+    PHASE_CONTROL
+};
+
+int currentPhase = PHASE_SELECTION;
 
 //the gesture set up can be moved to Glove.cpp on the communicating computer
 //Set up all gestures, gestures declared here are all standardized and are not assigned to specific commands
@@ -62,10 +68,7 @@ void setup(void){
 }
 
 void loop() {
-    switch(phase){
-        case PHASE_CALIBRATION:
-            //Code for calibrating the glove this will most likely get moved to the glove main.cpp
-            break;
+    switch(currentPhase){
         case PHASE_SELECTION:
             //Code for selecting which drone to use
             break;
