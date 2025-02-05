@@ -24,7 +24,7 @@
 #include <rclc/executor.h>
 #include <rclc/publisher.h>
 #include <std_msgs/msg/string.h>
-#include <std_msgs/msg/u_int8_multi_array.h>
+#include <std_msgs/msg/u_int8.h>
 
 // Code for MPU6050 sensor was referenced from the following repository: https://github.com/ElectronicCats/mpu6050/tree/master/examples
 // NOTE: accelerometer data values end up as estimates, if we were to leave the MPU6050 in a fixed position, we expect the outputs to be 0,0 and 9.8ms2 but it is not.
@@ -83,7 +83,7 @@ rcl_node_t node;
 rcl_timer_t timer;
 
 //  Messages
-std_msgs__msg__UInt8MultiArray msg;
+std_msgs__msg__UInt8 msg;
 
 //  ROS2 Topic Message for Publishing
 rcl_publisher_t publisher;
@@ -94,9 +94,7 @@ void publish_callback(rcl_timer_t* timer, int64_t last_call_time)
     if (timer == NULL) return;
 
     //  Fill the message
-    msg.data.data = dataPackage;
-    msg.data.size = sizeof(dataPackage) / sizeof(dataPackage[0]);
-    msg.data.capacity = msg.data.size;
+    msg.data = dataPackage;
 
     //  Publish the message 
     if (rcl_publish(&publisher, &msg, NULL) == RCL_RET_OK)
@@ -192,7 +190,7 @@ void setup(void) {
     rclc_publisher_init_default(
       &publisher,
       &node,
-      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8MultiArray),
+      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8),
       "/esp32_glove"
     );
 
@@ -209,9 +207,7 @@ void setup(void) {
     rclc_executor_add_timer(&executor, &timer);
 
     //  Message Initialization
-    msg.data.data = NULL;
-    msg.data.size = 0;
-    msg.data.capacity = 0;
+    msg.data = NULL;
     
     Serial.println("microROS setup complete!");
 }
@@ -224,29 +220,25 @@ void loop() {
   rngFing.updateRaw();
   pnkFing.updateRaw();
 
+  tmbFing.adjustScale(0, 100);
+  indFing.adjustScale(0, 100);
+  midFing.adjustScale(0, 100);
+  rngFing.adjustScale(0, 100);
+  pnkFing.adjustScale(0, 100);
+
   // Get the acceleration values from the MPU6050
   handMPU.getAcceleration(&handAx, &handAy, &handAz);
   handTilt.setAccelValues(handAx,handAy,handAz);
 
-  //Package the data to be sent                       Example data: ROCK-ON GESTURE 🤘
-  dataPackage = dataPackage + indFing.flexCheck();    //add index finger  : ex 0x01 (EXTD)
-                                                      //dataPackage = 00000001
-  dataPackage = dataPackage << 1;
-  dataPackage = dataPackage + midFing.flexCheck();    //add middle finger : ex 0x00 (FLEX)
-                                                      //dataPackage = 00000010
-  dataPackage = dataPackage << 1;
-  dataPackage = dataPackage + rngFing.flexCheck();    //add ring finger   : ex 0x00 (FLEX)
-                                                      //dataPackage = 00000100
-  dataPackage = dataPackage << 1;
-  dataPackage = dataPackage + pnkFing.flexCheck();    //add pinky finger  : ex 0x01 (EXTD)
-                                                      //dataPackage = 00001001
-  dataPackage = dataPackage << 1;
-  dataPackage = dataPackage + tmbFing.flexCheck();    //add thumb         : ex 0x01 (EXTD)
-                                                      //dataPackage = 00010011
-  dataPackage = dataPackage << 6;
-  dataPackage = dataPackage + handTilt.getOrientation();  //add hand orientation : ex 0b00000001 (FINGER_UP)
-                                                      //dataPackage = 10011001 (0x99)
-  
+  dataPackage = 0;
+  //Package the data to be sent
+  dataPackage = dataPackage + (indFing.flexCheck() << 7);
+  dataPackage = dataPackage + (midFing.flexCheck() << 6);
+  dataPackage = dataPackage + (rngFing.flexCheck() << 5);
+  dataPackage = dataPackage + (pnkFing.flexCheck() << 4);
+  dataPackage = dataPackage + (tmbFing.flexCheck() << 3);
+  dataPackage = dataPackage + handTilt.getOrientation();
+
   Serial.println("");
   delay(100);
 
