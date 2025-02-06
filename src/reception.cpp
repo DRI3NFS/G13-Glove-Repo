@@ -44,6 +44,12 @@ gesture thumbsDown;
 gesture thumbsUp;
 gesture okay;
 
+//counting gestures
+gesture oneGesture;
+gesture twoGesture;
+gesture threeGesture;
+gesture fourGesture;
+
 std::vector<gesture> gestureBank;                          //This is the gesture bank that will be used to check the gestures
 gesture currentGesture;                                    //This is the gesture that the glove is currently doing
 gesture foundGesture;                                      //This is the gesture that the program found
@@ -93,6 +99,12 @@ void setup(void){
     thumbsDown.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
     thumbsDown.assignDroneCommand(CMD_EMERGENCY_SHUTOFF);
     gestureBank.push_back(thumbsDown);
+
+    oneGesture.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
+    oneGesture.addFingerStates(FLEX,FLEX,FLEX,FLEX,EXTD);
+
+    twoGesture.setFingerStates(FLEX,EXTD,EXTD,FLEX,FLEX);
+    twoGesture.addFingerStates(FLEX,FLEX,FLEX,EXTD,EXTD);
 
     okay.setFingerStates(FLEX,FLEX,EXTD,EXTD,EXTD);
     okay.assignDroneCommand(CMD_REGULAR_SHUTOFF);           //assigned as regular shutoff as this command will return the program to "Select Phase"
