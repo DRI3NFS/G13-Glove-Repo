@@ -70,10 +70,10 @@ public:
 
     //this requires actual calibration depending on user hand flex ranges
     uint8_t flexCheck(){
-        if(scaledVal > 60){
+        if(scaledVal < 40){
             return EXTD;  //this is extended
         }
-        else if(scaledVal <= 60){  
+        else if(scaledVal >= 40){  
             return FLEX;  //this is flexed state
         }
         else{
@@ -242,14 +242,14 @@ public:
 
     //Set the flexion states of the fingers for this gesture. The order is thumb, index, middle, ring, pinky.
     void setFingerStates(uint8_t thumb, uint8_t index, uint8_t middle, uint8_t ring, uint8_t pinky) {
-        uint8_t fingerHandle = 0xF8;    //0b11111000    
+        uint8_t fingerHandle = 0x00;    //0b00000000   
         gestureID = gestureID & 0x07;   //clear first 5 bits
 
-        fingerHandle = fingerHandle & (thumb << 3);
-        fingerHandle = fingerHandle & (index << 7);
-        fingerHandle = fingerHandle & (middle << 6);
-        fingerHandle = fingerHandle & (ring << 5);
-        fingerHandle = fingerHandle & (pinky << 4);
+        fingerHandle = fingerHandle + (index << 7);
+        fingerHandle = fingerHandle + (middle << 6);
+        fingerHandle = fingerHandle + (ring << 5);
+        fingerHandle = fingerHandle + (pinky << 4);
+        fingerHandle = fingerHandle + (thumb << 3);
 
         gestureID = gestureID + fingerHandle;
         flexion = fingerHandle;
@@ -257,18 +257,19 @@ public:
 
     //If a gesture requires multiple possible finger states, add them using this function.
     void addFingerStates(uint8_t thumb, uint8_t index, uint8_t middle, uint8_t ring, uint8_t pinky){
-        uint8_t fingerHandle = 0xF8;    //0b11111000
+        uint8_t fingerHandle = 0x00;    //0b11111000
 
-        fingerHandle = fingerHandle & (thumb << 3);
-        fingerHandle = fingerHandle & (index << 7);
-        fingerHandle = fingerHandle & (middle << 6);
-        fingerHandle = fingerHandle & (ring << 5);
-        fingerHandle = fingerHandle & (pinky << 4);
+        fingerHandle = fingerHandle + (index << 7);
+        fingerHandle = fingerHandle + (middle << 6);
+        fingerHandle = fingerHandle + (ring << 5);
+        fingerHandle = fingerHandle + (pinky << 4);
+        fingerHandle = fingerHandle + (thumb << 3);
 
         if(!multipleFlexionStates){
             multipleFlexionStates = true;
 
-            allowedFlexionStates.push_back(this->flexion);
+            allowedFlexionStates.push_back(flexion);
+            allowedFlexionStates.push_back(fingerHandle);
         }
         else{
             allowedFlexionStates.push_back(fingerHandle);
@@ -301,57 +302,69 @@ public:
 
         //If the gesture does not have an assigned orientation, only the finger states are checked.
         if(orientation == 0){
+          if(!multipleFlexionStates){
             if((currentGesture & 0xF8) == flexion){
                 return true;
             }
             else{
                 return false;
             }
+          }
+          else if(multipleFlexionStates){
+            for (int i = 0; i < allowedFlexionStates.size(); i++) {
+              if ((currentGesture & 0xF8) == allowedFlexionStates[i]) {
+                return true;
+              }
+            }
+            return false;
+          }
         }
 
+        else{
         //If the gesture has assigned orientation, the function will check depending the following
         //four cases:   1. If the gesture has only one orientation and only one flexion state
         //              2. If the gesture has multiple orientations and only one flexion state
         //              3. If the gesture has only one orientation and multiple flexion states
         //              4. If the gesture has multiple orientations and multiple flexion states
-        if(!multipleFlexionStates){
-            if(!multipleOrientations){
-                if (currentGesture == gestureID) {
-                    return true;
-                }
-                else {
-                    return false;
-                }
-            }
-            else if(multipleOrientations){
-                for (int i = 0; i < allowedOrientations.size(); i++) {
-                    if (currentGesture == (flexion + allowedOrientations[i])) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-        }
+          if(!(multipleFlexionStates)){
+              if(!(multipleOrientations)){
+                  if (currentGesture == gestureID) {
+                      return true;
+                  }
+                  else {
+                      return false;
+                  }
+              }
+              else if(multipleOrientations){
+                  for (int i = 0; i < allowedOrientations.size(); i++) {
+                      if (currentGesture == (flexion + allowedOrientations[i])) {
+                          return true;
+                      }
+                  }
+                  return false;
+              }
+          }
 
-        else if(multipleFlexionStates){
-            if(!multipleOrientations){
-                for (int i = 0; i < allowedFlexionStates.size(); i++) {
-                    if (currentGesture == (allowedFlexionStates[i] + orientation)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            else if(multipleOrientations){
-                for (int i = 0; i < allowedFlexionStates.size(); i++) {
-                    for (int j = 0; j < allowedOrientations.size(); j++) {
-                        if (currentGesture == (allowedFlexionStates[i] + allowedOrientations[j])) {
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
+          else if(multipleFlexionStates){
+              if(!(multipleOrientations)){
+                  for (int i = 0; i < allowedFlexionStates.size(); i++) {
+                      if (currentGesture == (allowedFlexionStates[i] + orientation)) {
+                          return true;
+                      }
+                  }
+                  return false;
+              }
+              else if(multipleOrientations){
+                  for (int i = 0; i < allowedFlexionStates.size(); i++) {
+                      for (int j = 0; j < allowedOrientations.size(); j++) {
+                          if (currentGesture == (allowedFlexionStates[i] + allowedOrientations[j])) {
+                              return true;
+                          }
+                      }
+                  }
+                  return false;
+              }
+          }
         }
     }
 
