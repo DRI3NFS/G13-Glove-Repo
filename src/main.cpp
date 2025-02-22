@@ -71,6 +71,12 @@ gesture okay;
 gesture thumbsUp;
 gesture point;
 
+//made for testing
+gesture peace;
+gesture okay;
+gesture thumbsUp;
+gesture point;
+
 uint8_t dataPackage;       //THIS IS THE DATA PACKAGE THAT WILL BE SENT TO THE COMPUTER
 bool calibration = false;  //THIS IS THE CALIBRATION STATE OF THE GLOVE
 
