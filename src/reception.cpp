@@ -1,4 +1,5 @@
 //  "reception.cpp" by Ralph Ralion Lejano
+//  This file is a modified version of Edcel's file "publisher.cpp"
 //  The purpose of this code is to decode the data being received from the glove.
 //  The first addressable issue is to optimally decode what gesture the glove is sending using the values received from the gloves
 //  Then the code will convert this gesture into a command that will be sent to the drones.
@@ -14,23 +15,9 @@
 // 7. Thumb's down : regular shutoff
 // 8. Middle finger: emergency shutoff
 
-#include <Arduino.h>
 #include "Glove.h"
-#include <iostream>
-#include <string>
-#include <vector>
-#include <stdint.h>
-#include <algorithm>
 
 uint8_t gloveData;                                  //This is the data from the glove received from by the computer
-int controlledDrone;                                //This is the drone ID being controlled during the control phase
-
-enum phase{
-    PHASE_SELECTION,
-    PHASE_CONTROL
-};
-
-int currentPhase = PHASE_SELECTION;
 
 //the gesture set up can be moved to Glove.cpp on the communicating computer
 //Set up all gestures, gestures declared here are all standardized and are not assigned to specific commands
@@ -40,20 +27,26 @@ gesture pointForward;
 gesture thumbsBack;
 gesture thumbsLeft;
 gesture thumbsRight;
-gesture thumbsDown;
-gesture thumbsUp;
-gesture okay;
 
 //counting gestures
 gesture oneGesture;
 gesture twoGesture;
 gesture threeGesture;
 gesture fourGesture;
+gesture thumbsDown;
+gesture thumbsUp;
 
-std::vector<gesture> gestureBank;                          //This is the gesture bank that will be used to check the gestures
-gesture currentGesture;                                    //This is the gesture that the glove is currently doing
-gesture foundGesture;                                      //This is the gesture that the program found
-int selectedDrone;                                     //This is the drone currently selected during select phase
+//for phase selection purposes
+gesture switchPhase;
+int currentPhase = PHASE_SELECTION;
+
+//gesture banks
+std::vector<gesture> droneGestureBank;                          //Gesture Bank for Drone Command Controls
+std::vector<gesture> selectGestureBank;                        //Gesture Bank for Selection
+
+gesture currentGesture;
+uint8_t controlledDrones;                                        //drone ID for selected drones
+uint8_t selectedDrone;
 
 void setup(void){
     //When it comes to declaring gestures, you have the choice of declaring only orientation,
@@ -65,110 +58,143 @@ void setup(void){
     pointUp.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
     pointDown.addFingerStates(EXTD,EXTD,FLEX,FLEX,FLEX);    
     pointUp.assignDroneCommand(CMD_ASCEND);
-    gestureBank.push_back(pointUp);
+    droneGestureBank.push_back(pointUp);
 
     pointDown.setOrientation(FINGER_DOWN);
     pointDown.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
     pointDown.addFingerStates(EXTD,EXTD,FLEX,FLEX,FLEX);
     pointDown.assignDroneCommand(CMD_DESCEND);
-    gestureBank.push_back(pointDown);
+    droneGestureBank.push_back(pointDown);
 
     pointForward.setOrientation(THUMB_UP);
     pointForward.addOrientation(PALM_UP);
     pointForward.addOrientation(PALM_DOWN);
     pointForward.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
     pointForward.assignDroneCommand(CMD_FORWARD);
-    gestureBank.push_back(pointForward);
+    droneGestureBank.push_back(pointForward);
 
     thumbsBack.setOrientation(FINGER_UP);
     thumbsBack.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
     thumbsBack.assignDroneCommand(CMD_BACK);
-    gestureBank.push_back(thumbsBack);
+    droneGestureBank.push_back(thumbsBack);
 
     thumbsLeft.setOrientation(PALM_DOWN);
     thumbsLeft.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
     thumbsLeft.assignDroneCommand(CMD_LEFT);
-    gestureBank.push_back(thumbsLeft);
+    droneGestureBank.push_back(thumbsLeft);
 
     thumbsRight.setOrientation(PALM_UP);
     thumbsRight.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
     thumbsRight.assignDroneCommand(CMD_RIGHT);
-    gestureBank.push_back(thumbsRight);
+    droneGestureBank.push_back(thumbsRight);
 
     thumbsDown.setOrientation(THUMB_DOWN);
     thumbsDown.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
     thumbsDown.assignDroneCommand(CMD_EMERGENCY_SHUTOFF);
-    gestureBank.push_back(thumbsDown);
+    droneGestureBank.push_back(thumbsDown);
 
+    thumbsUp.setOrientation(THUMB_UP);
+    thumbsUp.setFingerStates(EXTD,FLEX,FLEX,FLEX,FLEX);
+    selectGestureBank.push_back(thumbsUp);
+
+    //general gestures for numbers
+    //orientation is set as "FINGER_UP" so that the program only counts it if the user has their hand up
     oneGesture.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
     oneGesture.addFingerStates(FLEX,FLEX,FLEX,FLEX,EXTD);
+    oneGesture.setOrientation(FINGER_UP);
+    selectGestureBank.push_back(oneGesture);
 
     twoGesture.setFingerStates(FLEX,EXTD,EXTD,FLEX,FLEX);
     twoGesture.addFingerStates(FLEX,FLEX,FLEX,EXTD,EXTD);
+    twoGesture.setOrientation(FINGER_UP);
+    selectGestureBank.push_back(twoGesture);
 
-    okay.setFingerStates(FLEX,FLEX,EXTD,EXTD,EXTD);
-    okay.assignDroneCommand(CMD_REGULAR_SHUTOFF);           //assigned as regular shutoff as this command will return the program to "Select Phase"
-    gestureBank.push_back(okay);
+    threeGesture.setFingerStates(FLEX, EXTD, EXTD, EXTD, FLEX);
+    threeGesture.addFingerStates(FLEX, FLEX, EXTD, EXTD, EXTD);
+    threeGesture.setOrientation(FINGER_UP);
+    selectGestureBank.push_back(threeGesture);
 
-    //sort the gesture bank, make sure this is at the end of the setup
-    std::sort(gestureBank.begin(), gestureBank.end());
+    fourGesture.setFingerStates(FLEX, EXTD, EXTD, EXTD, EXTD);
+    fourGesture.setOrientation(FINGER_UP);
+    selectGestureBank.push_back(fourGesture);
+
+    switchPhase.setFingerStates(FLEX, EXTD, EXTD, FLEX, FLEX);
+    switchPhase.setOrientation(FINGER_DOWN);
+    selectGestureBank.push_back(switchPhase);
 }
 
 void loop() {
-    currentGesture.updateID(gloveData);
     //Steps will be as follows:
     // 1. Check the gestureID that is received from the glove and identify what gesture is being done.
     //This returns a pointer to the gesture, not the object itself.
-    std::vector<gesture>::iterator it = std::find_if(gestureBank.begin(), gestureBank.end(), [](const gesture& g){ //this lambda function is used to check the gesture
-        return g.checkGesture(gloveData);
-    });
-
-    if(it != gestureBank.end()){
-        foundGesture = *it;           //could return an error
-    }
-
-    else if(it == gestureBank.end()){
-        foundGesture.clearCommand();  //defaults to invalid if no gesture is matched
-    }
-
     // 2. Check the current phase of the program and execute the corresponding command.
     switch(currentPhase){
         case PHASE_SELECTION:
-            uint8_t checkFlex = currentGesture.getFingerStates();
+            std::vector<gesture>::iterator it = std::find_if(selectGestureBank.begin(), selectGestureBank.end(), [](const gesture& g){
+                return g.checkGesture(gloveData);   //equality condition
+            });
 
-            if(checkFlex = 0x80){       //select drone 1
-                selectedDrone = 1;
-                //message glove to light up indicator for drone 1
+            //case where a gesture is recognized
+            if(it != selectGestureBank.end()){
+                uint8_t droneID = (*it).getDroneID();
+
+                //Drone selection, if the command has no assigned command then the switch simply breaks
+                switch(droneID){
+                    case 1:
+                        selectedDrone = DRN_1;
+                        break;
+                    case 2:
+                        selectedDrone = DRN_2;
+                        break;
+                    case 3:
+                        selectedDrone = DRN_3;
+                        break;
+                    case 4:
+                        selectedDrone = DRN_4;
+                        break;
+                    default:
+                        break;
+                }
+
+                //confirm selection
+                if((*it) == thumbsUp){
+                    controlledDrones |= selectedDrone;
+                }
+
+                //reject selection
+                else if((*it) == thumbsDown){
+                    uint8_t mask = ~selectedDrone;
+                    controlledDrones &= mask;
+                }
+
+                else if((*it) == switchPhase){
+                    currentPhase = PHASE_CONTROL;
+                }
+
                 break;
             }
 
-            else if(checkFlex = 0xC0){  //select drone 2
-                selectedDrone = 2;
-                //message glove to light up indicator for drone 2
+            //case where a gesture isn't recognized, program ignores
+            else if(it == selectGestureBank.end()){
                 break;
             }
-
-            else if(checkFlex = 0x10){  //raise pinky to select all drones
-                selectedDrone = 0;
-                //message glove to light up all drone indicators
-                break;
-            }
-
-            if (currentGesture == thumbsUp){
-                controlledDrone = selectedDrone;
-                currentPhase = PHASE_CONTROL;
-                //message glove to light up "In Control" indicator
-                //message glove to turn off "Select Drone" indicator
-                break;
-            }
-
         case PHASE_CONTROL:
-            DroneCommand droneCommand = currentGesture.getDroneCommand();
+            DroneCommand message;
 
+            std::vector<gesture>::iterator it = std::find_if(droneGestureBank.begin(), droneGestureBank.end(), [](const gesture& g){
+                return g.checkGesture(gloveData);   //equality condition
+            });
+
+            if(it != droneGestureBank.end()){
             //we want to send droneCommand to the correct drone
             //Control code here
 
             //Send command to drone
+            }
+
+            else if(it == droneGestureBank.end()){
+            //Send CMD_INVALID as a default case
+            }
 
     }
 }

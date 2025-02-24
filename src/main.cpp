@@ -65,20 +65,7 @@ FlexSensor rngFing(35);
 FlexSensor pnkFing(32);
 tiltSensor handTilt;
 
-//made for testing
-gesture peace;
-gesture okay;
-gesture thumbsUp;
-gesture point;
-
-//made for testing
-gesture peace;
-gesture okay;
-gesture thumbsUp;
-gesture point;
-
 uint8_t dataPackage;       //THIS IS THE DATA PACKAGE THAT WILL BE SENT TO THE COMPUTER
-bool calibration = false;  //THIS IS THE CALIBRATION STATE OF THE GLOVE
 
 /* Hotspot */
 char* ssid = "edcel";
@@ -132,107 +119,96 @@ void setup(void) {
     Serial.println("MPU Test for Hand Successful");
   }
 
-  peace.setFingerStates(FLEX, EXTD, EXTD, FLEX, FLEX);
-  peace.setOrientation(PALM_DOWN);
+    //  Initialize micro-ROS transport
+    set_microros_wifi_transports(ssid, pass, agent_ip, atoi(agent_port));
 
-  okay.setFingerStates(FLEX, FLEX, EXTD, EXTD, EXTD);
-  okay.setOrientation(PALM_DOWN);
+    //  Ping the microROS Agent 
+    Serial.print("Pinging micro-ROS Agent... ");
+    if (rmw_uros_ping_agent(2000, 10)) 
+    {  // Wait up to 2 seconds, try 10 times
+        Serial.println("Connected to micro-ROS Agent");
+    } else 
+    {
+        Serial.println("Failed to connect to micro-ROS Agent");
+    }
 
-  point.setFingerStates(FLEX,EXTD,FLEX,FLEX,FLEX);
+    //  Initialize micro-ROS
+    allocator = rcl_get_default_allocator();
 
-  thumbsUp.setFingerStates(EXTD, FLEX, FLEX, FLEX, FLEX);
-  thumbsUp.addFingerStates(EXTD, FLEX, FLEX, FLEX, EXTD);
-  thumbsUp.setOrientation(PALM_DOWN);
-    // //  Initialize micro-ROS transport
-    // set_microros_wifi_transports(ssid, pass, agent_ip, atoi(agent_port));
+    //  Initialize RCL init options 
+    rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
+    rcl_ret_t ret = rcl_init_options_init(&init_options, allocator);
+    if (ret != RCL_RET_OK)
+    {
+        Serial.println("Failed to initialize RCL init options");
+        return;
+    }
+    else
+    {
+        Serial.println("RCL init options initialized.");  
+    }
 
-    // //  Ping the microROS Agent 
-    // Serial.print("Pinging micro-ROS Agent... ");
-    // if (rmw_uros_ping_agent(2000, 10)) 
-    // {  // Wait up to 2 seconds, try 10 times
-    //     Serial.println("Connected to micro-ROS Agent");
-    // } else 
-    // {
-    //     Serial.println("Failed to connect to micro-ROS Agent");
-    // }
-
-    // //  Initialize micro-ROS
-    // allocator = rcl_get_default_allocator();
-
-    // //  Initialize RCL init options 
-    // rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
-    // rcl_ret_t ret = rcl_init_options_init(&init_options, allocator);
-    // if (ret != RCL_RET_OK)
-    // {
-    //     Serial.println("Failed to initialize RCL init options");
-    //     return;
-    // }
-    // else
-    // {
-    //     Serial.println("RCL init options initialized.");  
-    // }
-
-    // //  Set ROS DOMAIN ID Option to 
-    // size_t domain_id = 42;
-    // ret = rcl_init_options_set_domain_id(&init_options, domain_id);
-    // if (ret != RCL_RET_OK)
-    // {
-    //     Serial.println("\nFailed to set domain ID");
-    //     return;
-    // }
-    // else
-    // {
-    //     Serial.println("ROS_DOMAIN_ID Set.");  
-    // }
+    //  Set ROS DOMAIN ID Option to 
+    size_t domain_id = 42;
+    ret = rcl_init_options_set_domain_id(&init_options, domain_id);
+    if (ret != RCL_RET_OK)
+    {
+        Serial.println("\nFailed to set domain ID");
+        return;
+    }
+    else
+    {
+        Serial.println("ROS_DOMAIN_ID Set.");  
+    }
     
-    // // Initialize micro-ROS support with default options
-    // ret = rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator);
-    // if (ret != RCL_RET_OK) 
-    // {
-    //     Serial.printf("\nFailed to initialize micro-ROS support, error %d\n", ret);
-    //     return;
-    // }
-    // else
-    // {
-    //     Serial.println("micro-ROS support initialized.");  
-    // }
+    // Initialize micro-ROS support with default options
+    ret = rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator);
+    if (ret != RCL_RET_OK) 
+    {
+        Serial.printf("\nFailed to initialize micro-ROS support, error %d\n", ret);
+        return;
+    }
+    else
+    {
+        Serial.println("micro-ROS support initialized.");  
+    }
 
-    // //  Node Creation
-    // ret = rclc_node_init_default(&node, "esp32_publisher_node", "", &support);
-    // if (ret != RCL_RET_OK)
-    // {
-    //     Serial.printf("\nFailed to initialize node, error: %d\n", ret);  
-    //     return;
-    // }
-    // else 
-    // {
-    //     Serial.println("Node Created.");
-    // }
+    //  Node Creation
+    ret = rclc_node_init_default(&node, "esp32_publisher_node", "", &support);
+    if (ret != RCL_RET_OK)
+    {
+        Serial.printf("\nFailed to initialize node, error: %d\n", ret);  
+        return;
+    }
+    else 
+    {
+        Serial.println("Node Created.");
+    }
 
-    // //  Create a publisher 
-    // rclc_publisher_init_default(
-    //   &publisher,
-    //   &node,
-    //   ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8),
-    //   "/esp32_glove"
-    // );
+    //  Create a publisher 
+    rclc_publisher_init_default(
+      &publisher,
+      &node,
+      ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt8),
+      "/esp32_glove"
+    );
 
-    // //  Create a timer (1 second period)
-    // rclc_timer_init_default(
-    //   &timer,
-    //   &support,
-    //   RCL_MS_TO_NS(1000),
-    //   publish_callback
-    // );
+    //  Create a timer (1 second period)
+    rclc_timer_init_default(
+      &timer,
+      &support,
+      RCL_MS_TO_NS(1000),
+      publish_callback
+    );
 
-    // //  Initialize executor
-    // rclc_executor_init(&executor, &support.context, 1, &allocator);
-    // rclc_executor_add_timer(&executor, &timer);
+    //  Initialize executor
+    rclc_executor_init(&executor, &support.context, 1, &allocator);
+    rclc_executor_add_timer(&executor, &timer);
 
-    // //  Message Initialization
-    // msg.data = NULL;
+    //  Message Initialization
+    msg.data = NULL;
     
-    // Serial.println("microROS setup complete!");
+    Serial.println("microROS setup complete!");
 }
 
 void loop() {
@@ -262,28 +238,9 @@ void loop() {
   dataPackage = dataPackage + (tmbFing.flexCheck() << 3);
   dataPackage = dataPackage + handTilt.getOrientation();
 
-  Serial.printf("Gesture is: ");
-  if(peace.checkGesture(dataPackage)){
-    Serial.print("PEACE");
-  }
-  else if(okay.checkGesture(dataPackage)){
-    Serial.print("OKAY");
-  }
-  else if(thumbsUp.checkGesture(dataPackage)){
-    Serial.print("Thumbs UP");
-  }
-  else if(point.checkGesture(dataPackage)){
-    Serial.print("Point");
-  }
-  else{
-    Serial.print("No known gesture detected");
-  }
-  Serial.println("");
-  delay(100);
-
-  // Serial.println("Spinning...");
-  // //  Spin Executor
-  // rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
+  Serial.println("Spinning...");
+  //  Spin Executor
+  rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
 
   //  Delay to control publishing rate
   delay(10); 
