@@ -15,6 +15,7 @@
 #define THUMB_DOWN  0b00000101
 #define PALM_UP     0b00000100
 #define PALM_DOWN   0b00000011
+#define NULL        0b00000000
 
 // Defines for the different finger flexion states
 #define FLEX 0x00
@@ -54,31 +55,22 @@ public:
     FlexSensor(int pin);
 
     //update raw value
-    void updateRaw(){}
+    void updateRaw();
 
     //scales sensor range to whatever user specifies it to be
-    void adjustScale(int newMin, int newMax){}
+    void adjustScale(int newMin, int newMax);
 
-    int getRaw(){}
+    int getRaw();
 
-    int getScaled(){}
+    int getScaled();
 
     //this requires actual calibration depending on user hand flex ranges
-    uint8_t flexCheck(){}
+    uint8_t flexCheck();
     
 private:
-    void autoCalibrate() {
-        if (rawValue > max) max = rawValue;
-        if (rawValue < min) min = rawValue;
-    }
+    void autoCalibrate();
 
-    void scale(int* valueToScale, int input){
-        int range = max - min;
-        if (range == 0) range = 1;  //to eliminate divide by 0 error
-        int scaledRange = scaledMax - scaledMin;
-
-        *valueToScale = (((input - min) * (scaledRange)) / (range)) + scaledMin;
-    }
+    void scale(int* valueToScale, int input);
 
     int rawValue;
     int pin;
@@ -89,24 +81,40 @@ private:
     int scaledVal;
     int scaledMax;
     int scaledMin;
+
+    int flexState;
 };
 
 class tiltSensor {
 //the following are the key motions of the wrist: flexion, extension, radial deviation, ulnar deviation, pronation and supination
 //radial and ulnar deviation would require either a magnetometer to detect so will be dropped for now
 public:
-    void setAccelValues(int16_t MPUax, int16_t MPUay, int16_t MPUaz){}
-    //these values are assigned for right hand orientations with your arm pointing forward
-    //all of these values purely depend on my own arm's range of motion and are arbitrary
-    //thumb up, thumb down, palm down, palm up, point down, point up
-    uint8_t getOrientation(){}
+    tiltSensor(MPU6050* mpu);
+    ~tiltSensor();
 
-private:    
-    uint8_t orientation;
+    void setAccelValues();                      //Gets acceleration values from MPU6050
+    void setFingerUpRange(int pitchFromUp);
+    void setFingerDownRange(int pitchFromDown);
+    void setThumbUpRange(int input);
+    void setThumbDownRange(int input);
+    void setPalmUpRange(int input);
+    void setPalmDownRange(int input);
+
+    uint8_t getOrientation();
+
+private:
+    MPU6050* mpu;    
     int16_t ax, ay, az;
 
     float pitch;
     float roll;
+
+    int fingerUpRange;
+    int fingerDownRange;
+    int thumbUpRange;
+    int thumbDownRange;
+    int palmUpRange;
+    int palmDownRange;
 };
 
 //Gesture class
@@ -115,37 +123,39 @@ private:
 class gesture {
 public:
     //Create a gesture object with a name and a set of finger states.
-    gesture(){}
-    ~gesture() {}       //deconstructor
+    gesture();
+    ~gesture();       //deconstructor
 
-    void updateID(uint8_t ID){}
-    uint8_t getGestureID() const {}    //Get the sensor data of the gesture
+    void updateID(uint8_t ID);
+    uint8_t getGestureID() const;    //Get the sensor data of the gesture
 
-    void setOrientation(uint8_t inputOrientation){}    //Set the BASE orientation to be used for IDing a gesture.
-    void addOrientation(uint8_t inputOrientation){}    //If a gesture is valid for multiple SPECIFIC BUT NOT ALL orientations, add them using this function.
-    uint8_t getOrientation() const {}    //Returns the orientation of the gesture. If multiple orientations are allowed, only the first orientation is returned.
+    int getGesturePriority() const;
+
+    void setOrientation(uint8_t inputOrientation);    //Set the BASE orientation to be used for IDing a gesture.
+    void addOrientation(uint8_t inputOrientation);    //If a gesture is valid for multiple SPECIFIC BUT NOT ALL orientations, add them using this function.
+    uint8_t getOrientation() const;    //Returns the orientation of the gesture. If multiple orientations are allowed, only the first orientation is returned.
 
     void setFingerStates(uint8_t thumb, uint8_t index, uint8_t middle, uint8_t ring, uint8_t pinky) {}    //Set the flexion states of the fingers for this gesture. The order is thumb, index, middle, ring, pinky.
     void addFingerStates(uint8_t thumb, uint8_t index, uint8_t middle, uint8_t ring, uint8_t pinky){}    //If a gesture requires multiple possible finger states, add them using this function.
-    uint8_t getFingerStates() const {}    //Returns flexion states. As in the gestureID of this gesture with orientation omitted.
+    uint8_t getFingerStates() const;   //Returns flexion states. As in the gestureID of this gesture with orientation omitted.
 
-    void assignDroneCommand(DroneCommand command){} //Assigns a specific command to the gesture. Only one command is allowed.
-    DroneCommand getDroneCommand () const {}
+    void assignDroneCommand(DroneCommand command); //Assigns a specific command to the gesture. Only one command is allowed.
+    DroneCommand getDroneCommand () const;
 
-    void setDroneID(uint8_t droneNum){} //Assigns a DroneID for this gesture. Only one ID is allowed.
-    uint8_t getDroneID() const {}
+    void setDroneID(uint8_t droneNum); //Assigns a DroneID for this gesture. Only one ID is allowed.
+    uint8_t getDroneID() const;
 
-    bool checkGesture(uint8_t currentGesture) const{}    //Check if the gesture matches the current gesture
+    bool checkGesture(uint8_t currentGesture) const;    //Check if the gesture matches the current gesture
 
     //this is used for sorting gestures in a set
-    bool operator < (const gesture& otherGesture) const {}
-    bool operator > (const gesture& otherGesture) const {}
-    bool operator == (const gesture& otherGesture) const {}
-    void operator = (gesture& replacementGesture){}
+    bool operator < (const gesture& otherGesture) const;
+    bool operator > (const gesture& otherGesture) const;
+    bool operator == (const gesture& otherGesture) const;
+    void operator = (gesture& replacementGesture);
 
     //removes all gesture information
-    void clearGesture(){}
-    void clearCommand(){}
+    void clearGesture();
+    void clearCommand();
 
 private:
     uint8_t gestureID;                  //Sensor data formatted such that the first 5 bits are the finger states and the last 3 bits are the hand orientation
@@ -160,6 +170,8 @@ private:
     uint8_t orientation;        //This is the base orientation of the gesture (the first orientation added)
     bool multipleOrientations;
     std::vector<uint8_t> allowedOrientations;
+
+    int gesturePriority;
 };
 
 #endif // GLOVE_H

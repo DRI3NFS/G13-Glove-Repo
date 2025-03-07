@@ -26,32 +26,13 @@
 #include <std_msgs/msg/string.h>
 #include <std_msgs/msg/u_int8.h>
 
+//#define COMMTEST //Disable commtest if only testing glove stuff
+
 // Code for MPU6050 sensor was referenced from the following repository: https://github.com/ElectronicCats/mpu6050/tree/master/examples
 // NOTE: accelerometer data values end up as estimates, if we were to leave the MPU6050 in a fixed position, we expect the outputs to be 0,0 and 9.8ms2 but it is not.
 // Flex sensor code was made using simple ADC capture and data adjustments to accomodate for resistance variability
 // Important things to note: might have to change the gesture signatures into non-string data to conserve flash space
 // Communication code must be eventually integrated into this code unless we decided on using separate esp32s for the functions
-
-//                 calibration
-//                      |
-//                      v
-//                    idle
-//                      |
-//                      v
-//              connect to drones
-//                      |
-//                      v
-//                select drone        (maybe we can sign a certain gesture to select one or the other or both)
-//            |         ^         |
-//            v         |         v
-//        ctrl drone1   |     ctrl drone2
-//          |           |         |
-//          |-----------|---------| (sent through a specific gesture or set of gestures)
-//          v                     v
-//     cmd sent (auto)        cmd sent (auto)
-//          |                     |
-//          V                     v
-//        drone 1               drone 2
 
 // Declare MPU6050 objects for the hand
 MPU6050 handMPU(0x68);
@@ -63,10 +44,13 @@ FlexSensor indFing(39);
 FlexSensor midFing(34);
 FlexSensor rngFing(35);
 FlexSensor pnkFing(32);
-tiltSensor handTilt;
+tiltSensor handTilt(&handMPU);
+
+bool Calibrate = false;
 
 uint8_t dataPackage;       //THIS IS THE DATA PACKAGE THAT WILL BE SENT TO THE COMPUTER
 
+#ifdef COMMTEST
 /* Hotspot */
 char* ssid = "edcel";
 char* pass = "edcel1234";
@@ -107,6 +91,8 @@ void publish_callback(rcl_timer_t* timer, int64_t last_call_time)
     
 }
 
+#endif
+
 void setup(void) {
   Serial.begin(115200);
   Wire.begin();
@@ -119,6 +105,7 @@ void setup(void) {
     Serial.println("MPU Test for Hand Successful");
   }
 
+  #ifdef COMMTEST
     //  Initialize micro-ROS transport
     set_microros_wifi_transports(ssid, pass, agent_ip, atoi(agent_port));
 
@@ -209,6 +196,7 @@ void setup(void) {
     msg.data = NULL;
     
     Serial.println("microROS setup complete!");
+    #endif
 }
 
 void loop() {
@@ -226,8 +214,7 @@ void loop() {
   pnkFing.adjustScale(0, 100);
 
   // Get the acceleration values from the MPU6050
-  handMPU.getAcceleration(&handAx, &handAy, &handAz);
-  handTilt.setAccelValues(handAx,handAy,handAz);
+  handTilt.setAccelValues();
 
   dataPackage = 0;
   //Package the data to be sent
@@ -237,11 +224,11 @@ void loop() {
   dataPackage = dataPackage + (pnkFing.flexCheck() << 4);
   dataPackage = dataPackage + (tmbFing.flexCheck() << 3);
   dataPackage = dataPackage + handTilt.getOrientation();
-
+#ifdef COMMTEST
   Serial.println("Spinning...");
   //  Spin Executor
   rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
-
+#endif
   //  Delay to control publishing rate
   delay(10); 
 }
