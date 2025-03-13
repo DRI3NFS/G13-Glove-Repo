@@ -6,7 +6,7 @@
 #include <MPU6050.h>
 
 //constructor
-FlexSensor::FlexSensor(int pin) : pin(pin), rawValue(0), scaledVal(0), max(0), min(2000), flexState(50) { //declare what adc pin it is connected on esp32
+FlexSensor::FlexSensor(int pin) : pin(pin), rawValue(0), scaledVal(0), max(0), min(2000), flexState(40) { //declare what adc pin it is connected on esp32
 }
 
 //update raw value
@@ -21,6 +21,9 @@ void FlexSensor::adjustScale(int newMin, int newMax){
     scaledMin = newMin;
 
     scale(&scaledVal, rawValue);
+
+    Serial.printf("%d",scaledVal);
+    Serial.println("");
 }
 
 int FlexSensor::getRaw(){
@@ -43,14 +46,6 @@ uint8_t FlexSensor::flexCheck(){
 
 //this needs to be modified to include a dampening logic that prevents outlier values from replacing max and min
 void FlexSensor::autoCalibrate() {
-
-    //this is to prevent the sensor from calibrating to an outlier value
-    //If the current reading magnitude is more than 40% (i.e. 140%/-40%) than
-    //the range, then the value is rejected.
-    int check;
-    this->scale(&check, rawValue);
-    if(abs(check)>40) return;   
-
     //Update scale
     if (rawValue > max) {
         max = rawValue;
@@ -73,16 +68,28 @@ void FlexSensor::scale(int* valueToScale, int input){
 //the following are the key motions of the wrist: flexion, extension, radial deviation, ulnar deviation, pronation and supination
 //radial and ulnar deviation would require either a magnetometer to detect so will be dropped for now
 //Captures current orientation of hand sensor by calculating roll and pitch. Does not capture direction.
-tiltSensor::tiltSensor(MPU6050* mpu) : ax(0), ay(0), az(0), pitch(0), roll(0) {
-    mpu->initialize();
+tiltSensor::tiltSensor(MPU6050* mpuInput) : ax(0), ay(0), az(0), pitch(0), roll(0) {
+  mpu = mpuInput;
 }
 
 void tiltSensor::setAccelValues(){
     mpu->getAcceleration(&ax, &ay, &az);
 
+    float accelx = ax/16384.0f;
+    float accely = ay/16384.0f;
+    float accelz = az/16384.0f;
+
+    Serial.printf("%.2f, %.2f, %.2f,",accelx,accely,accelz);
+    Serial.println("");
+
     //automated the conversion to pitch and roll which i assume are more useful values
     pitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180 / M_PI;
     roll = atan2(ay, az) * 180 / M_PI;
+
+    Serial.printf("roll = %f",roll);
+    Serial.println("");
+    Serial.printf("pitch = %f",pitch);
+    Serial.println("");
 }
 
 //all of these values purely depend on my own arm's range of motion and are arbitrary
@@ -92,9 +99,9 @@ uint8_t tiltSensor::getOrientation(){
     if (pitch > 45) return FINGER_UP;   // Finger Up
     if (pitch < -45) return FINGER_DOWN; // Finger Down
 
-    if (roll >= -135 && roll <= -45) return THUMB_DOWN;  // Thumb Down
+    if (roll >= -135 && roll <= -45) return THUMB_UP;  // Thumb Down
     if (roll >= -45 && roll <= 45) return PALM_DOWN;    // Palm Down
-    if (roll >= 45 && roll <= 135) return THUMB_UP;     // Thumb Up
+    if (roll >= 45 && roll <= 135) return THUMB_DOWN;     // Thumb Up
     if ((roll >= 135 && roll <= 180) || (roll >= -180 && roll <= -135)) return PALM_UP; // Palm Up
 
     return NULL;
